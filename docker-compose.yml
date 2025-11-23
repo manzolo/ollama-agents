@@ -1,0 +1,150 @@
+# ============================================================================
+# OLLAMA AGENTS - Modular AI Agent Architecture
+# ============================================================================
+# This Docker Compose file defines a modular architecture for running
+# multiple specialized AI agents powered by Ollama.
+#
+# To add a new agent:
+# 1. Copy the swarm-converter service block
+# 2. Update the service name, container name, port, and volumes
+# 3. Create a new folder under agents/ with prompt.txt and config.yml
+# 4. Add environment variables in .env if needed
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # OLLAMA SERVICE - Core LLM Engine
+  # ==========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-engine
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - agent-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # BASE AGENT: SWARM-CONVERTER
+  # ==========================================================================
+  # Converts docker-compose YAML files to Docker Swarm stack files
+  # Endpoint: http://localhost:7001/convert
+  # ==========================================================================
+  swarm-converter:
+    build:
+      context: ./agents/base
+      dockerfile: Dockerfile
+    container_name: agent-swarm-converter
+    restart: unless-stopped
+    ports:
+      - "${SWARM_CONVERTER_PORT:-7001}:8000"
+    volumes:
+      - ./agents/swarm-converter/prompt.txt:/app/prompt.txt:ro
+      - ./agents/swarm-converter/config.yml:/app/config.yml:ro
+      - ./shared/context/swarm-converter:/app/context
+    networks:
+      - agent-network
+    environment:
+      - AGENT_NAME=swarm-converter
+      - OLLAMA_HOST=http://ollama:11434
+      - MODEL_NAME=${SWARM_CONVERTER_MODEL:-llama3.2}
+      - TEMPERATURE=${SWARM_CONVERTER_TEMPERATURE:-0.7}
+      - MAX_TOKENS=${SWARM_CONVERTER_MAX_TOKENS:-4096}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ==========================================================================
+  # ADDITIONAL AGENTS - ADD YOUR CUSTOM AGENTS BELOW
+  # ==========================================================================
+  # Template for adding new agents:
+  #
+  # agent-name:
+  #   build:
+  #     context: ./agents/base
+  #     dockerfile: Dockerfile
+  #   container_name: agent-<name>
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${AGENT_PORT:-7002}:8000"
+  #   volumes:
+  #     - ./agents/<agent-name>/prompt.txt:/app/prompt.txt:ro
+  #     - ./agents/<agent-name>/config.yml:/app/config.yml:ro
+  #     - ./shared/context/<agent-name>:/app/context
+  #   networks:
+  #     - agent-network
+  #   environment:
+  #     - AGENT_NAME=<agent-name>
+  #     - OLLAMA_HOST=http://ollama:11434
+  #     - MODEL_NAME=${AGENT_MODEL:-llama3.2}
+  #     - TEMPERATURE=${AGENT_TEMPERATURE:-0.7}
+  #     - MAX_TOKENS=${AGENT_MAX_TOKENS:-4096}
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
+  #
+  # ==========================================================================
+
+  # Example: Code Review Agent (commented out)
+  # code-reviewer:
+  #   build:
+  #     context: ./agents/base
+  #     dockerfile: Dockerfile
+  #   container_name: agent-code-reviewer
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${CODE_REVIEWER_PORT:-7002}:8000"
+  #   volumes:
+  #     - ./agents/code-reviewer/prompt.txt:/app/prompt.txt:ro
+  #     - ./agents/code-reviewer/config.yml:/app/config.yml:ro
+  #     - ./shared/context/code-reviewer:/app/context
+  #   networks:
+  #     - agent-network
+  #   environment:
+  #     - AGENT_NAME=code-reviewer
+  #     - OLLAMA_HOST=http://ollama:11434
+  #     - MODEL_NAME=${CODE_REVIEWER_MODEL:-codellama}
+  #     - TEMPERATURE=${CODE_REVIEWER_TEMPERATURE:-0.3}
+  #     - MAX_TOKENS=${CODE_REVIEWER_MAX_TOKENS:-8192}
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+networks:
+  agent-network:
+    driver: bridge
+    name: ollama-agent-network
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+volumes:
+  ollama-models:
+    name: ollama-models-data
+    driver: local

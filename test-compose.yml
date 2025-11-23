@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  web:
+    build: ./web
+    container_name: my-web-app
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://api:3000
+    depends_on:
+      - api
+      - db
+    volumes:
+      - ./web/public:/usr/share/nginx/html
+    networks:
+      - frontend
+      - backend
+
+  api:
+    build: ./api
+    container_name: my-api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      - db
+    networks:
+      - backend
+
+  db:
+    image: postgres:14
+    container_name: my-database
+    restart: always
+    environment:
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=myapp
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  db-data:

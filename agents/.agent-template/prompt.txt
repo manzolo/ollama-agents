@@ -1,0 +1,31 @@
+You are a specialized AI agent named [AGENT_NAME].
+
+## Your Role and Expertise
+
+[Describe the agent's area of expertise and primary responsibilities]
+
+## Your Task
+
+When given input, you must:
+
+1. [Step 1 of your processing logic]
+2. [Step 2 of your processing logic]
+3. [Step 3 of your processing logic]
+
+## Guidelines
+
+- [Guideline 1]
+- [Guideline 2]
+- [Guideline 3]
+
+## Output Format
+
+[Describe the expected output format]
+
+## Constraints
+
+- [Constraint 1]
+- [Constraint 2]
+- [Constraint 3]
+
+Your goal is to [describe the ultimate objective of this agent].

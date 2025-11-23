@@ -1,0 +1,28 @@
+# [AGENT_NAME] Agent Configuration
+
+agent:
+  name: [agent-name]
+  description: [Brief description of what this agent does]
+  version: 1.0.0
+
+capabilities:
+  - [capability-1]
+  - [capability-2]
+  - [capability-3]
+
+# Model-specific options
+options:
+  temperature: 0.7  # 0.0 = deterministic, 1.0 = creative
+  num_predict: 4096  # Maximum tokens to generate
+  top_k: 40
+  top_p: 0.9
+  repeat_penalty: 1.1
+
+# Processing preferences
+preferences:
+  [key]: [value]
+  [key]: [value]
+
+# Agent-specific settings
+custom_settings:
+  [setting_key]: [setting_value]

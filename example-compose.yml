@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  nginx:
+    build: ./nginx
+    container_name: webserver
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/html:/usr/share/nginx/html
+    depends_on:
+      - app
+    networks:
+      - frontend
+
+  app:
+    build: ./app
+    container_name: application
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgres://user:pass@db:5432/mydb
+    depends_on:
+      - db
+      - redis
+    networks:
+      - frontend
+      - backend
+
+  db:
+    image: postgres:15
+    container_name: database
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=mydb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: cache
+    restart: always
+    networks:
+      - backend
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  postgres-data:

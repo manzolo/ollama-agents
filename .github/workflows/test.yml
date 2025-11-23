@@ -1,0 +1,217 @@
+name: Test Ollama Agents
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Create required directories
+        run: |
+          mkdir -p shared/context/swarm-converter
+
+      - name: Build services
+        run: |
+          docker compose build --no-cache
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Start Ollama service
+        run: |
+          docker compose up -d ollama
+          echo "Waiting for Ollama to be ready..."
+          sleep 10
+
+      - name: Wait for Ollama health
+        run: |
+          max_attempts=30
+          attempt=0
+          until docker compose exec -T ollama ollama list > /dev/null 2>&1; do
+            attempt=$((attempt + 1))
+            if [ $attempt -ge $max_attempts ]; then
+              echo "Ollama failed to become healthy"
+              docker compose logs ollama
+              exit 1
+            fi
+            echo "Waiting for Ollama... ($attempt/$max_attempts)"
+            sleep 10
+          done
+          echo "Ollama is healthy!"
+
+      - name: Pull Ollama model
+        run: |
+          docker compose exec -T ollama ollama pull llama3.2
+          echo "Model pulled successfully"
+
+      - name: Start swarm-converter agent
+        run: |
+          docker compose up -d swarm-converter
+          echo "Waiting for agent to be ready..."
+          sleep 15
+
+      - name: Wait for agent health
+        run: |
+          max_attempts=20
+          attempt=0
+          until curl -f -s http://localhost:7001/health > /dev/null 2>&1; do
+            attempt=$((attempt + 1))
+            if [ $attempt -ge $max_attempts ]; then
+              echo "Agent failed to become healthy"
+              docker compose logs swarm-converter
+              exit 1
+            fi
+            echo "Waiting for agent... ($attempt/$max_attempts)"
+            sleep 5
+          done
+          echo "Agent is healthy!"
+
+      - name: Test - Health Check
+        run: |
+          echo "Testing health endpoint..."
+          response=$(curl -s http://localhost:7001/health)
+          echo "$response" | jq .
+
+          status=$(echo "$response" | jq -r '.status')
+          if [ "$status" != "healthy" ]; then
+            echo "Health check failed: status is $status"
+            exit 1
+          fi
+          echo "✓ Health check passed"
+
+      - name: Test - Agent Info
+        run: |
+          echo "Testing info endpoint..."
+          response=$(curl -s http://localhost:7001/info)
+          echo "$response" | jq .
+
+          agent_name=$(echo "$response" | jq -r '.agent')
+          if [ "$agent_name" != "swarm-converter" ]; then
+            echo "Info check failed: agent name is $agent_name"
+            exit 1
+          fi
+          echo "✓ Info check passed"
+
+      - name: Test - Process Endpoint
+        run: |
+          echo "Testing process endpoint..."
+          cat > test-input.json << 'EOF'
+          {
+            "input": "version: '3.8'\nservices:\n  web:\n    build: .\n    restart: always\n    ports:\n      - \"80:80\""
+          }
+          EOF
+
+          response=$(curl -s -X POST http://localhost:7001/process \
+            -H "Content-Type: application/json" \
+            -d @test-input.json)
+
+          echo "$response" | jq .
+
+          output=$(echo "$response" | jq -r '.output')
+          if [ -z "$output" ] || [ "$output" = "null" ]; then
+            echo "Process endpoint failed: no output"
+            exit 1
+          fi
+          echo "✓ Process endpoint passed"
+
+      - name: Test - Raw Endpoint
+        run: |
+          echo "Testing raw endpoint..."
+          cat > test-input.json << 'EOF'
+          {
+            "input": "version: '3.8'\nservices:\n  web:\n    image: nginx\n    restart: always"
+          }
+          EOF
+
+          response=$(curl -s -X POST http://localhost:7001/process/raw \
+            -H "Content-Type: application/json" \
+            -d @test-input.json)
+
+          echo "$response" | jq .
+
+          output=$(echo "$response" | jq -r '.output')
+          format=$(echo "$response" | jq -r '.format')
+
+          if [ -z "$output" ] || [ "$output" = "null" ]; then
+            echo "Raw endpoint failed: no output"
+            exit 1
+          fi
+
+          if [ "$format" != "yaml" ]; then
+            echo "Raw endpoint warning: format is $format (expected yaml)"
+          fi
+          echo "✓ Raw endpoint passed"
+
+      - name: Test - OpenAPI Schema
+        run: |
+          echo "Testing OpenAPI schema..."
+          response=$(curl -s http://localhost:7001/openapi.json)
+
+          title=$(echo "$response" | jq -r '.info.title')
+          if [ -z "$title" ]; then
+            echo "OpenAPI schema failed: no title"
+            exit 1
+          fi
+          echo "✓ OpenAPI schema valid: $title"
+
+      - name: Test - Context Endpoints
+        run: |
+          echo "Testing context endpoint..."
+          response=$(curl -s http://localhost:7001/context)
+          echo "$response" | jq .
+
+          agent_name=$(echo "$response" | jq -r '.agent')
+          if [ "$agent_name" != "swarm-converter" ]; then
+            echo "Context check failed"
+            exit 1
+          fi
+          echo "✓ Context endpoint passed"
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Ollama Logs ==="
+          docker compose logs ollama
+          echo ""
+          echo "=== Agent Logs ==="
+          docker compose logs swarm-converter
+          echo ""
+          echo "=== Container Status ==="
+          docker compose ps
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v
+          docker system prune -f
+
+      - name: Test Summary
+        if: success()
+        run: |
+          echo "================================"
+          echo "✅ All tests passed successfully!"
+          echo "================================"
+          echo "Tests run:"
+          echo "  ✓ Health check"
+          echo "  ✓ Agent info"
+          echo "  ✓ Process endpoint"
+          echo "  ✓ Raw endpoint"
+          echo "  ✓ OpenAPI schema"
+          echo "  ✓ Context endpoints"
+          echo "================================"
