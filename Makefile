@@ -235,9 +235,9 @@ run-raw-json: ## Run agent and return extracted result as JSON (use: make run-ra
 health: ## Check health of all agents
 	@echo "$(BLUE)Checking Agent Health:$(NC)"
 	@echo ""
-	@for container in $$(docker compose ps --format json | jq -r '.Name' | grep agent-); do \
-		echo "$(YELLOW)$$container:$(NC)"; \
-		port=$$(docker compose port $$container 8000 2>/dev/null | cut -d':' -f2); \
+	@for service in $$(docker compose ps --format json | jq -r 'select(.Name | contains("agent-")) | .Service'); do \
+		echo "$(YELLOW)$$service:$(NC)"; \
+		port=$$(docker compose port $$service 8000 2>/dev/null | cut -d':' -f2); \
 		if [ -n "$$port" ]; then \
 			curl -s http://localhost:$$port/health | jq -r '"  Status: " + .status + " | Model: " + .model' 2>/dev/null || \
 				echo "  $(RED)Unreachable$(NC)"; \
