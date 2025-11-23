@@ -1,0 +1,13 @@
+agent:
+  name: swarm-validator
+  description: Validates Docker Swarm stack files for correctness and best practices.
+
+options:
+  temperature: 0.1
+  num_predict: 4096
+  top_p: 0.9
+
+capabilities:
+  - syntax_validation
+  - best_practices_check
+  - security_audit
