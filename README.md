@@ -68,8 +68,8 @@ The system supports:
 ### Prerequisites
 
 - Docker and Docker Compose
-- (Optional) NVIDIA GPU with Docker GPU support
 - At least 8GB RAM (16GB+ recommended)
+- (Optional) NVIDIA GPU with Docker GPU support - see [GPU-SETUP.md](GPU-SETUP.md) for details
 
 ### 1. Initialize the Project
 
@@ -720,11 +720,19 @@ OLLAMA_PORT=11434
 ### Basic Operations
 
 ```bash
+# CPU Mode (Default)
 make up          # Start all services
+make init        # Initialize project (build, start, pull models)
 make down        # Stop all services
 make restart     # Restart all services
 make build       # Build/rebuild services
 make rebuild     # Full rebuild (down, build, up)
+
+# GPU Mode (Optional - requires NVIDIA GPU)
+make up-gpu      # Start all services with GPU support
+make init-gpu    # Initialize project with GPU support
+make restart-gpu # Restart all services with GPU
+make rebuild-gpu # Full rebuild with GPU
 ```
 
 ### Monitoring
@@ -838,12 +846,23 @@ SWARM_CONVERTER_PORT=7101
 make restart
 ```
 
-### GPU Not Detected
+### GPU Support
 
-For NVIDIA GPUs, ensure:
-1. NVIDIA Docker runtime is installed
-2. The deploy configuration in docker-compose.yml is uncommented
-3. Run `nvidia-smi` to verify GPU availability
+This project supports both **CPU mode** (default) and **GPU mode** (optional).
+
+**CPU Mode** (Default):
+```bash
+make up          # Start in CPU mode
+make init        # Initialize in CPU mode
+```
+
+**GPU Mode** (Requires NVIDIA GPU):
+```bash
+make up-gpu      # Start with GPU support
+make init-gpu    # Initialize with GPU support
+```
+
+For complete GPU setup instructions, prerequisites, and troubleshooting, see **[GPU-SETUP.md](GPU-SETUP.md)**.
 
 ### Out of Memory
 

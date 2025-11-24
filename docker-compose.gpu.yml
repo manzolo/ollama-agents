@@ -1,0 +1,31 @@
+# ============================================================================
+# GPU Override for Ollama Agents
+# ============================================================================
+# This file adds NVIDIA GPU support to the Ollama service.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+#
+# Or use the Makefile:
+#   make up-gpu
+#   make init-gpu
+#
+# Prerequisites:
+#   - NVIDIA GPU installed
+#   - NVIDIA Docker runtime installed
+#   - nvidia-docker2 package installed
+#
+# To verify GPU support:
+#   nvidia-smi
+#   docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
+# ============================================================================
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]

@@ -27,13 +27,9 @@ services:
       - agent-network
     environment:
       - OLLAMA_HOST=0.0.0.0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
+    # GPU support is configured in docker-compose.gpu.yml
+    # To enable GPU: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+    # Or use: make up-gpu
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
       interval: 10s

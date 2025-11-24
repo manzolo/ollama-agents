@@ -26,6 +26,8 @@ jobs:
       - name: Create required directories
         run: |
           mkdir -p shared/context/swarm-converter
+          mkdir -p shared/context/swarm-validator
+          mkdir -p backoffice/workflows
 
       - name: Build services
         run: |

@@ -1,4 +1,4 @@
-.PHONY: help up down restart build logs ps pull-models test-agent clean health status
+.PHONY: help up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -34,10 +34,17 @@ help: ## Show this help message
 # ============================================================================
 # Docker Compose Operations
 # ============================================================================
-up: ## Start all services
-	@echo "$(BLUE)Starting Ollama Agents...$(NC)"
+up: ## Start all services (CPU mode)
+	@echo "$(BLUE)Starting Ollama Agents (CPU mode)...$(NC)"
 	docker compose up -d
 	@echo "$(GREEN)✓ Services started$(NC)"
+	@make status
+
+up-gpu: ## Start all services with GPU support
+	@echo "$(BLUE)Starting Ollama Agents (GPU mode)...$(NC)"
+	@echo "$(YELLOW)Note: Requires NVIDIA GPU and nvidia-docker runtime$(NC)"
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+	@echo "$(GREEN)✓ Services started with GPU$(NC)"
 	@make status
 
 down: ## Stop all services
@@ -50,12 +57,19 @@ restart: ## Restart all services
 	docker compose restart
 	@echo "$(GREEN)✓ Services restarted$(NC)"
 
+restart-gpu: ## Restart all services with GPU
+	@echo "$(BLUE)Restarting Ollama Agents (GPU mode)...$(NC)"
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml restart
+	@echo "$(GREEN)✓ Services restarted with GPU$(NC)"
+
 build: ## Build/rebuild all services
 	@echo "$(BLUE)Building services...$(NC)"
 	docker compose build --no-cache
 	@echo "$(GREEN)✓ Build complete$(NC)"
 
-rebuild: down build up ## Full rebuild: stop, build, start
+rebuild: down build up ## Full rebuild: stop, build, start (CPU)
+
+rebuild-gpu: down build up-gpu ## Full rebuild with GPU: stop, build, start
 
 # ============================================================================
 # Logging and Monitoring
@@ -370,8 +384,8 @@ quick-test: up ## Quick start and test swarm-converter
 	@sleep 5
 	@make test-agent agent=swarm-converter
 
-init: ## Initialize project (pull models, start services)
-	@echo "$(BLUE)Initializing Ollama Agents project...$(NC)"
+init: ## Initialize project (pull models, start services) - CPU mode
+	@echo "$(BLUE)Initializing Ollama Agents project (CPU mode)...$(NC)"
 	@make build
 	@make up
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
@@ -384,4 +398,23 @@ init: ## Initialize project (pull models, start services)
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  - Run 'make health' to check agent status"
 	@echo "  - Run 'make test-agent agent=swarm-converter' to test the agent"
+	@echo "  - Visit http://localhost:8080 for the Backoffice Web UI"
+	@echo "  - Check README.md for API usage examples"
+
+init-gpu: ## Initialize project with GPU support
+	@echo "$(BLUE)Initializing Ollama Agents project (GPU mode)...$(NC)"
+	@echo "$(YELLOW)Note: Requires NVIDIA GPU and nvidia-docker runtime$(NC)"
+	@make build
+	@make up-gpu
+	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
+	@sleep 10
+	@make pull-models
+	@make status
+	@echo ""
+	@echo "$(GREEN)✓ Initialization complete with GPU!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Next steps:$(NC)"
+	@echo "  - Run 'make health' to check agent status"
+	@echo "  - Run 'make test-agent agent=swarm-converter' to test the agent"
+	@echo "  - Visit http://localhost:8080 for the Backoffice Web UI"
 	@echo "  - Check README.md for API usage examples"
