@@ -5,6 +5,98 @@
 
 const API_BASE = '/api';
 
+// Theme Management
+const ThemeManager = {
+    STORAGE_KEY: 'ollama-agents-theme',
+    THEMES: {
+        LIGHT: 'light',
+        DARK: 'dark'
+    },
+
+    /**
+     * Initialize theme based on saved preference or system preference
+     */
+    init() {
+        const savedTheme = this.getSavedTheme();
+        const theme = savedTheme || this.getSystemTheme();
+        this.setTheme(theme);
+        this.setupToggle();
+        this.watchSystemTheme();
+    },
+
+    /**
+     * Get saved theme from localStorage
+     */
+    getSavedTheme() {
+        return localStorage.getItem(this.STORAGE_KEY);
+    },
+
+    /**
+     * Get system theme preference
+     */
+    getSystemTheme() {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            return this.THEMES.DARK;
+        }
+        return this.THEMES.LIGHT;
+    },
+
+    /**
+     * Set theme
+     */
+    setTheme(theme) {
+        const root = document.documentElement;
+        const icon = document.getElementById('theme-icon');
+
+        if (theme === this.THEMES.DARK) {
+            root.setAttribute('data-theme', 'dark');
+            if (icon) icon.textContent = '☀️';
+        } else {
+            root.setAttribute('data-theme', 'light');
+            if (icon) icon.textContent = '🌙';
+        }
+
+        localStorage.setItem(this.STORAGE_KEY, theme);
+    },
+
+    /**
+     * Toggle theme
+     */
+    toggle() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? this.THEMES.LIGHT : this.THEMES.DARK;
+        this.setTheme(newTheme);
+    },
+
+    /**
+     * Setup toggle button
+     */
+    setupToggle() {
+        const toggleBtn = document.getElementById('theme-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggle());
+        }
+    },
+
+    /**
+     * Watch for system theme changes
+     */
+    watchSystemTheme() {
+        if (window.matchMedia) {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            mediaQuery.addEventListener('change', (e) => {
+                // Only apply system theme if user hasn't manually set a preference
+                if (!this.getSavedTheme()) {
+                    this.setTheme(e.matches ? this.THEMES.DARK : this.THEMES.LIGHT);
+                }
+            });
+        }
+    }
+};
+
+// Initialize theme as early as possible
+ThemeManager.init();
+
 // Toast Notification System
 const Toast = {
     show(message, type = 'info', duration = 4000) {
