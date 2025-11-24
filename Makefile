@@ -1,4 +1,4 @@
-.PHONY: help up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu
+.PHONY: help wizard up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -22,14 +22,125 @@ help: ## Show this help message
 	@echo "$(BLUE)║           OLLAMA AGENTS - Available Commands                 ║$(NC)"
 	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo "$(YELLOW)🚀 QUICK START$(NC)"
+	@echo "  $(GREEN)wizard$(NC)              Interactive setup guide"
+	@echo "  $(GREEN)init$(NC)                Initialize project (CPU mode)"
+	@echo "  $(GREEN)init-gpu$(NC)            Initialize with GPU support"
 	@echo ""
-	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  make up                    # Start all services"
-	@echo "  make logs agent=swarm-converter"
-	@echo "  make test-agent agent=swarm-converter"
+	@echo "$(YELLOW)🎮 BASIC OPERATIONS$(NC)"
+	@echo "  $(GREEN)up$(NC)                  Start services (CPU mode)"
+	@echo "  $(GREEN)up-gpu$(NC)              Start services with GPU"
+	@echo "  $(GREEN)down$(NC)                Stop all services"
+	@echo "  $(GREEN)restart$(NC)             Restart services"
+	@echo "  $(GREEN)status$(NC)              Show service status"
+	@echo "  $(GREEN)health$(NC)              Check agent health"
 	@echo ""
+	@echo "$(YELLOW)🤖 AGENT OPERATIONS$(NC)"
+	@echo "  $(GREEN)run$(NC)                 Run agent with file (agent=X file=Y)"
+	@echo "  $(GREEN)test-agent$(NC)          Test agent health (agent=X)"
+	@echo "  $(GREEN)logs$(NC)                View logs (agent=X, optional)"
+	@echo "  $(GREEN)docs$(NC)                Open Swagger UI (agent=X)"
+	@echo ""
+	@echo "$(YELLOW)📦 MODELS$(NC)"
+	@echo "  $(GREEN)pull-models$(NC)         Pull default models"
+	@echo "  $(GREEN)list-models$(NC)         List available models"
+	@echo "  $(GREEN)pull-model$(NC)          Pull specific model (model=X)"
+	@echo ""
+	@echo "$(YELLOW)🛠️  DEVELOPMENT$(NC)"
+	@echo "  $(GREEN)build$(NC)               Build services"
+	@echo "  $(GREEN)rebuild$(NC)             Full rebuild (CPU)"
+	@echo "  $(GREEN)rebuild-gpu$(NC)         Full rebuild with GPU"
+	@echo "  $(GREEN)shell-agent$(NC)         Shell into agent (agent=X)"
+	@echo ""
+	@echo "$(YELLOW)🧹 CLEANUP$(NC)"
+	@echo "  $(GREEN)clean$(NC)               Remove all data"
+	@echo "  $(GREEN)prune$(NC)               Prune Docker resources"
+	@echo ""
+	@echo "$(YELLOW)💡 Examples:$(NC)"
+	@echo "  make wizard                              # Interactive guide"
+	@echo "  make run agent=swarm-converter file=docker-compose.yml"
+	@echo "  make logs agent=swarm-converter          # View specific logs"
+	@echo ""
+	@echo "$(BLUE)For full command list: grep '##' Makefile$(NC)"
+	@echo ""
+
+# ============================================================================
+# Wizard Mode
+# ============================================================================
+wizard: ## Interactive setup guide
+	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║           OLLAMA AGENTS - Setup Wizard                       ║$(NC)"
+	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Welcome! This wizard will help you get started.$(NC)"
+	@echo ""
+	@echo "$(BLUE)Step 1: Choose Mode$(NC)"
+	@echo "  1) CPU Mode (works everywhere, recommended for first time)"
+	@echo "  2) GPU Mode (requires NVIDIA GPU + nvidia-docker)"
+	@echo ""
+	@read -p "Enter choice [1-2] (default: 1): " choice; \
+	choice=$${choice:-1}; \
+	echo ""; \
+	if [ "$$choice" = "2" ]; then \
+		echo "$(YELLOW)Checking GPU availability...$(NC)"; \
+		if command -v nvidia-smi > /dev/null 2>&1; then \
+			nvidia-smi > /dev/null 2>&1 && echo "$(GREEN)✓ NVIDIA GPU detected$(NC)" || echo "$(RED)⚠ NVIDIA driver may not be working$(NC)"; \
+		else \
+			echo "$(RED)⚠ nvidia-smi not found. See GPU-SETUP.md for installation.$(NC)"; \
+			echo "$(YELLOW)Continuing with CPU mode...$(NC)"; \
+			choice=1; \
+		fi; \
+		echo ""; \
+	fi; \
+	\
+	echo "$(BLUE)Step 2: Initialize Project$(NC)"; \
+	echo "$(YELLOW)This will build containers, start services, and pull models (~5-10 min)$(NC)"; \
+	read -p "Continue? [Y/n]: " confirm; \
+	confirm=$${confirm:-y}; \
+	echo ""; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		echo "$(BLUE)Setup cancelled. Run 'make wizard' when ready.$(NC)"; \
+		exit 0; \
+	fi; \
+	\
+	if [ "$$choice" = "2" ]; then \
+		echo "$(GREEN)Initializing with GPU support...$(NC)"; \
+		echo ""; \
+		make init-gpu; \
+	else \
+		echo "$(GREEN)Initializing in CPU mode...$(NC)"; \
+		echo ""; \
+		make init; \
+	fi; \
+	\
+	echo ""; \
+	echo "$(BLUE)Step 3: What's Next?$(NC)"; \
+	echo ""; \
+	echo "$(YELLOW)🌐 Backoffice Web UI$(NC)"; \
+	echo "  Open http://localhost:8080 to:"; \
+	echo "  • Discover available agents"; \
+	echo "  • Create multi-agent workflows"; \
+	echo "  • Execute workflows visually"; \
+	echo ""; \
+	echo "$(YELLOW)🧪 Test an Agent$(NC)"; \
+	echo "  make run agent=swarm-converter file=docker-compose.yml"; \
+	echo ""; \
+	echo "$(YELLOW)📖 Documentation$(NC)"; \
+	echo "  • README.md - Full documentation"; \
+	echo "  • QUICKSTART.md - Quick start guide"; \
+	echo "  • GPU-SETUP.md - GPU setup instructions"; \
+	echo ""; \
+	read -p "Open Backoffice Web UI now? [Y/n]: " open_ui; \
+	open_ui=$${open_ui:-y}; \
+	if [ "$$open_ui" = "y" ] || [ "$$open_ui" = "Y" ]; then \
+		echo "$(GREEN)Opening http://localhost:8080...$(NC)"; \
+		xdg-open "http://localhost:8080" 2>/dev/null || \
+		open "http://localhost:8080" 2>/dev/null || \
+		echo "$(YELLOW)Please open: http://localhost:8080$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(GREEN)✓ Setup complete! Run 'make help' to see all commands.$(NC)"; \
+	echo ""
 
 # ============================================================================
 # Docker Compose Operations

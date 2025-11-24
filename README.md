@@ -73,12 +73,23 @@ The system supports:
 
 ### 1. Initialize the Project
 
-```bash
-# Clone or navigate to the project directory
-cd ollama-agents
+**🚀 Recommended: Use the Interactive Wizard**
 
-# Initialize and start all services
+```bash
+# Run the setup wizard (guides you step-by-step)
+make wizard
+```
+
+The wizard will guide you through CPU/GPU selection, initialization, and next steps.
+
+**Or Initialize Manually:**
+
+```bash
+# Initialize in CPU mode (works everywhere)
 make init
+
+# Or initialize with GPU support (requires NVIDIA GPU)
+make init-gpu
 ```
 
 This will:

@@ -1,10 +1,25 @@
 # Quick Start Guide
 
-## Initial Setup
+## 🚀 Fastest Way: Use the Wizard
 
 ```bash
-# 1. Initialize the project (first time only)
+# Interactive setup guide (recommended for first time)
+make wizard
+
+# The wizard will:
+# - Guide you through CPU/GPU mode selection
+# - Initialize the project automatically
+# - Help you get started with next steps
+```
+
+## Manual Setup
+
+```bash
+# Initialize the project (first time only)
 make init
+
+# Or with GPU support
+make init-gpu
 
 # This will:
 # - Build all containers (agents + backoffice)
@@ -120,6 +135,7 @@ make test-agent agent=my-agent
 
 ```bash
 make help                                        # Show all commands
+make wizard                                      # Interactive setup guide
 make run agent=X file=Y                          # Run agent with file
 make status                                      # Service status
 make health                                      # Health checks
