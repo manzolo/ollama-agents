@@ -292,12 +292,28 @@ def clean_output(text: str) -> str:
 
     Priority:
     1. Extract first code block if present
-    2. Remove common markdown formatting
+    2. Remove common markdown formatting and leading comments
     3. Return cleaned text
     """
     # Try to extract code block first
     code_block = extract_first_code_block(text)
     if code_block:
+        # Remove leading comment lines from code block
+        lines = code_block.split('\n')
+        # Skip leading comment-only lines (YAML/shell comments)
+        start_idx = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Skip if line is empty or is a comment
+            if not stripped or stripped.startswith('#'):
+                start_idx = i + 1
+            else:
+                # Found first non-comment line
+                break
+
+        # Return from first non-comment line onwards
+        if start_idx > 0 and start_idx < len(lines):
+            return '\n'.join(lines[start_idx:])
         return code_block
 
     # If no code block, clean markdown formatting

@@ -382,7 +382,9 @@ header p {
     border-radius: 6px;
     font-size: 0.95em;
     font-family: inherit;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+    background-color: var(--card-bg);
+    color: var(--text-color);
 }
 
 .form-group input:focus,
@@ -395,6 +397,11 @@ header p {
 .form-group textarea {
     resize: vertical;
     font-family: 'Courier New', monospace;
+}
+
+.form-group select option {
+    background-color: var(--card-bg);
+    color: var(--text-color);
 }
 
 .form-actions {
