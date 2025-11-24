@@ -189,7 +189,7 @@ logs: ## Show logs (use: make logs agent=<name>)
 	@if [ -z "$(agent)" ]; then \
 		docker compose logs -f; \
 	else \
-		docker compose logs -f agent-$(agent); \
+		docker compose logs -f $(agent); \
 	fi
 
 logs-ollama: ## Show Ollama service logs
@@ -236,11 +236,11 @@ test-agent: ## Test an agent (use: make test-agent agent=<name>)
 	fi
 	@echo "$(BLUE)Testing agent: $(agent)$(NC)"
 	@echo "Checking health..."
-	@curl -s http://localhost:$$(docker compose port agent-$(agent) 8000 | cut -d':' -f2)/health | jq . || \
+	@curl -s http://localhost:$$(docker compose port $(agent) 8000 | cut -d':' -f2)/health | jq . || \
 		echo "$(RED)Health check failed$(NC)"
 	@echo ""
 	@echo "$(GREEN)To test with input, use:$(NC)"
-	@echo "curl -X POST http://localhost:$$(docker compose port agent-$(agent) 8000 | cut -d':' -f2)/process \\"
+	@echo "curl -X POST http://localhost:$$(docker compose port $(agent) 8000 | cut -d':' -f2)/process \\"
 	@echo "  -H 'Content-Type: application/json' \\"
 	@echo "  -d '{\"input\": \"your test input here\"}' | jq ."
 
@@ -431,7 +431,7 @@ agent-info: ## Get agent info (use: make agent-info agent=<name>)
 		exit 1; \
 	fi
 	@echo "$(BLUE)Agent Info: $(agent)$(NC)"
-	@port=$$(docker compose port agent-$(agent) 8000 | cut -d':' -f2); \
+	@port=$$(docker compose port $(agent) 8000 | cut -d':' -f2); \
 	curl -s http://localhost:$$port/info | jq .
 
 agent-context: ## View agent context (use: make agent-context agent=<name>)
@@ -440,7 +440,7 @@ agent-context: ## View agent context (use: make agent-context agent=<name>)
 		exit 1; \
 	fi
 	@echo "$(BLUE)Agent Context: $(agent)$(NC)"
-	@port=$$(docker compose port agent-$(agent) 8000 | cut -d':' -f2); \
+	@port=$$(docker compose port $(agent) 8000 | cut -d':' -f2); \
 	curl -s http://localhost:$$port/context | jq .
 
 agent-clear-context: ## Clear agent context (use: make agent-clear-context agent=<name>)
@@ -449,7 +449,7 @@ agent-clear-context: ## Clear agent context (use: make agent-clear-context agent
 		exit 1; \
 	fi
 	@echo "$(BLUE)Clearing context for: $(agent)$(NC)"
-	@port=$$(docker compose port agent-$(agent) 8000 | cut -d':' -f2); \
+	@port=$$(docker compose port $(agent) 8000 | cut -d':' -f2); \
 	curl -s -X DELETE http://localhost:$$port/context | jq .
 
 # ============================================================================
@@ -482,7 +482,7 @@ shell-agent: ## Open shell in agent container (use: make shell-agent agent=<name
 		echo "$(RED)Error: agent parameter required$(NC)"; \
 		exit 1; \
 	fi
-	docker compose exec agent-$(agent) bash
+	docker compose exec $(agent) bash
 
 dev-watch: ## Watch logs of all services
 	docker compose logs -f --tail=50
