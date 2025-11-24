@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Agents Backoffice</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🤖 Ollama Agents Backoffice</h1>
+            <p>Multi-Agent Workflow Management System</p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-button active" data-tab="agents">Agents</button>
+            <button class="tab-button" data-tab="workflows">Workflows</button>
+            <button class="tab-button" data-tab="execute">Execute</button>
+            <button class="tab-button" data-tab="executions">History</button>
+        </nav>
+
+        <!-- Tab Content -->
+        <main>
+            <!-- Agents Tab -->
+            <section id="agents-tab" class="tab-content active">
+                <div class="section-header">
+                    <h2>Available Agents</h2>
+                    <button onclick="app.loadAgents()" class="btn btn-secondary">🔄 Refresh</button>
+                </div>
+                <div id="agents-list" class="grid">
+                    <div class="loading">Loading agents...</div>
+                </div>
+            </section>
+
+            <!-- Workflows Tab -->
+            <section id="workflows-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Workflows</h2>
+                    <div>
+                        <button onclick="app.loadWorkflows()" class="btn btn-secondary">🔄 Refresh</button>
+                        <button onclick="app.showCreateWorkflow()" class="btn btn-primary">➕ Create</button>
+                    </div>
+                </div>
+                <div id="workflows-list" class="grid">
+                    <div class="loading">Loading workflows...</div>
+                </div>
+            </section>
+
+            <!-- Execute Tab -->
+            <section id="execute-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Execute Workflow</h2>
+                </div>
+                <div class="card">
+                    <form id="execute-form">
+                        <div class="form-group">
+                            <label for="workflow-select">Workflow</label>
+                            <select id="workflow-select" required>
+                                <option value="">-- Select a workflow --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="workflow-input">Input</label>
+                            <textarea id="workflow-input" rows="10" placeholder="Enter input data..." required></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">▶ Execute Workflow</button>
+                        </div>
+                    </form>
+                </div>
+                <div id="execution-result" class="card" style="display: none;">
+                    <h3>Execution Result</h3>
+                    <div id="execution-result-content"></div>
+                </div>
+            </section>
+
+            <!-- Executions History Tab -->
+            <section id="executions-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Execution History</h2>
+                    <button onclick="app.loadExecutions()" class="btn btn-secondary">🔄 Refresh</button>
+                </div>
+                <div id="executions-list">
+                    <div class="loading">Loading execution history...</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for Create Workflow -->
+    <div id="create-workflow-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Workflow</h2>
+                <button onclick="app.hideCreateWorkflow()" class="btn-close">&times;</button>
+            </div>
+            <form id="create-workflow-form">
+                <div class="form-group">
+                    <label for="workflow-name">Name</label>
+                    <input type="text" id="workflow-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="workflow-description">Description</label>
+                    <input type="text" id="workflow-description">
+                </div>
+                <div class="form-group">
+                    <label for="workflow-config">Workflow Configuration (YAML)</label>
+                    <textarea id="workflow-config" rows="15" placeholder="steps:
+  - name: step1
+    agent: agent-name
+    input: original
+  - name: step2
+    agent: another-agent
+    input: previous" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="app.hideCreateWorkflow()" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Workflow</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Agent Details -->
+    <div id="agent-details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Agent Details</h2>
+                <button onclick="app.hideAgentDetails()" class="btn-close">&times;</button>
+            </div>
+            <div id="agent-details-content"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Confirm Dialog -->
+    <div id="confirm-dialog" class="confirm-dialog">
+        <div class="confirm-dialog-content">
+            <div class="confirm-dialog-title" id="confirm-title">Confirm</div>
+            <div class="confirm-dialog-message" id="confirm-message">Are you sure?</div>
+            <div class="confirm-dialog-actions">
+                <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+                <button class="btn btn-primary" id="confirm-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Dialog -->
+    <div id="prompt-dialog" class="prompt-dialog">
+        <div class="prompt-dialog-content">
+            <div class="prompt-dialog-title" id="prompt-title">Input Required</div>
+            <div class="prompt-dialog-message" id="prompt-message">Please enter a value:</div>
+            <input type="text" class="prompt-dialog-input" id="prompt-input">
+            <div class="prompt-dialog-actions">
+                <button class="btn btn-secondary" id="prompt-cancel">Cancel</button>
+                <button class="btn btn-primary" id="prompt-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

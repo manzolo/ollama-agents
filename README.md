@@ -1,16 +1,17 @@
 # Ollama Agents - Modular AI Agent Architecture
 
-A clean, modular, and extensible Docker Compose architecture for hosting multiple specialized AI agents powered by Ollama.
+A clean, modular, and extensible Docker Compose architecture for hosting multiple specialized AI agents powered by Ollama, with a powerful **Backoffice Web UI** for managing multi-agent workflows.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [Backoffice - Workflow Manager](#backoffice---workflow-manager)
 - [Project Structure](#project-structure)
-- [Base Agent: Swarm Converter](#base-agent-swarm-converter)
+- [Base Agents](#base-agents)
 - [Swagger UI / API Documentation](#swagger-ui--api-documentation)
-- [Inter-Agent Communication](#inter-agent-communication)
+- [Creating Workflows](#creating-workflows)
 - [Adding New Agents](#adding-new-agents)
 - [API Reference](#api-reference)
 - [Configuration](#configuration)
@@ -21,25 +22,34 @@ A clean, modular, and extensible Docker Compose architecture for hosting multipl
 
 This project provides a modular framework for deploying multiple specialized AI agents, each with:
 
-- Its own Ollama model
-- Custom prompt configuration
-- Dedicated API endpoint
-- Optional context memory
-- Independent scaling and configuration
+- **Its own Ollama model** - Choose the best model for each task
+- **Custom prompt configuration** - Define agent behavior via YAML
+- **Dedicated API endpoint** - Each agent has its own REST API
+- **Optional context memory** - Agents can remember past interactions
+- **Independent scaling** - Scale agents individually based on load
+
+**NEW**: **Backoffice Web UI** - A modern web interface for creating and executing multi-agent workflows without writing code!
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Ollama Engine                       │
+│               Backoffice Web UI (:8080)                 │
+│   - Workflow Management  - Agent Discovery              │
+│   - Visual Execution     - History Tracking             │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                  Ollama Engine (:11434)                 │
 │                  (LLM Model Server)                     │
 └────────────┬─────────────┬─────────────┬────────────────┘
              │             │             │
              ▼             ▼             ▼
      ┌───────────┐  ┌───────────┐  ┌───────────┐
      │  Agent 1  │  │  Agent 2  │  │  Agent N  │
-     │  (Swarm   │  │  (Custom) │  │  (Custom) │
-     │ Converter)│  │           │  │           │
+     │  (Swarm   │  │ (Swarm    │  │  (Custom) │
+     │ Converter)│  │ Validator)│  │           │
      └─────┬─────┘  └─────┬─────┘  └─────┬─────┘
            │              │              │
            ▼              ▼              ▼
@@ -47,12 +57,11 @@ This project provides a modular framework for deploying multiple specialized AI 
          API            API            API
 ```
 
-Each agent:
-- Runs in its own container
-- Has a dedicated FastAPI server
-- Connects to shared Ollama service
-- Uses custom prompts and configuration
-- Stores context independently
+The system supports:
+- **Individual agents** - Call agents directly via their APIs
+- **Workflow orchestration** - Chain agents through the Backoffice
+- **YAML-based workflows** - Define complex pipelines without coding
+- **Error handling** - Automatic retries and graceful failures
 
 ## Quick Start
 
@@ -73,18 +82,33 @@ make init
 ```
 
 This will:
-- Build the agent containers
-- Start Ollama and the swarm-converter agent
+- Build all containers (agents + backoffice)
+- Start Ollama, agents, and the backoffice
 - Pull the required models (llama3.2)
 - Display service status
 
-### 2. Test the Swarm Converter Agent
+### 2. Access the Backoffice Web UI
+
+Open your browser to:
+```
+http://localhost:8080
+```
+
+The Backoffice provides:
+- **Agents Tab** - View all available agents and their status
+- **Workflows Tab** - Create and manage multi-agent workflows
+- **Execute Tab** - Run workflows with custom input
+- **History Tab** - Review past workflow executions
+
+### 3. Test an Agent Directly (Optional)
+
+You can also call agents directly via their APIs:
 
 ```bash
 # Quick health check
 make test-agent agent=swarm-converter
 
-# Run with a YAML file (easiest method)
+# Run with a YAML file
 make run agent=swarm-converter file=docker-compose.yml
 
 # Or manually test with curl
@@ -95,7 +119,7 @@ curl -X POST http://localhost:7001/process \
   }' | jq .
 ```
 
-### 3. Check All Services
+### 4. Check All Services
 
 ```bash
 # View status
@@ -108,6 +132,39 @@ make health
 make logs
 ```
 
+## Backoffice - Workflow Manager
+
+The **Backoffice** is a web-based interface for managing agents and orchestrating multi-agent workflows.
+
+### Features
+
+- 🤖 **Agent Discovery** - Automatically detect and monitor all agents
+- 🔄 **Workflow Management** - Create, edit, and delete workflows via UI or YAML
+- ▶️ **Visual Execution** - Run workflows and see real-time progress
+- 📊 **Execution History** - Track all workflow runs with detailed results
+- 🎨 **Modern UI** - Clean, responsive interface with toast notifications
+- 🔗 **REST API** - Full API for programmatic access
+
+### Quick Example
+
+1. **Access the UI**: http://localhost:8080
+2. **Create a Workflow** (or use the pre-built example):
+   ```yaml
+   name: convert-and-validate
+   description: Convert docker-compose to swarm and validate
+   steps:
+     - name: convert
+       agent: swarm-converter
+       input: original
+     - name: validate
+       agent: swarm-validator
+       input: previous
+   ```
+3. **Execute the Workflow** with your docker-compose file
+4. **View Results** in real-time with step-by-step output
+
+For complete documentation, see [backoffice/README.md](backoffice/README.md) and [BACKOFFICE-GUIDE.md](BACKOFFICE-GUIDE.md).
+
 ## Project Structure
 
 ```
@@ -116,6 +173,7 @@ ollama-agents/
 ├── .env                        # Environment configuration
 ├── Makefile                    # Convenient commands
 ├── README.md                   # This file
+├── BACKOFFICE-GUIDE.md        # Complete backoffice guide
 │
 ├── agents/
 │   ├── base/                   # Base agent implementation
@@ -123,7 +181,11 @@ ollama-agents/
 │   │   ├── app.py            # FastAPI application
 │   │   └── requirements.txt  # Python dependencies
 │   │
-│   ├── swarm-converter/       # Swarm converter agent config
+│   ├── swarm-converter/       # Docker Compose to Swarm converter
+│   │   ├── prompt.txt        # System prompt
+│   │   └── config.yml        # Agent configuration
+│   │
+│   ├── swarm-validator/       # Swarm stack validator
 │   │   ├── prompt.txt        # System prompt
 │   │   └── config.yml        # Agent configuration
 │   │
@@ -131,14 +193,39 @@ ollama-agents/
 │       ├── prompt.txt
 │       └── config.yml
 │
+├── backoffice/                 # Workflow management system
+│   ├── Dockerfile             # Backoffice container
+│   ├── README.md              # Detailed documentation
+│   ├── backend/               # FastAPI server
+│   │   ├── app.py            # Main API server
+│   │   ├── orchestrator.py   # Workflow engine
+│   │   └── requirements.txt  # Dependencies
+│   ├── frontend/              # Web UI
+│   │   ├── index.html        # Main page
+│   │   ├── app.js            # Application logic
+│   │   └── styles.css        # Styling
+│   └── workflows/             # Workflow definitions (YAML)
+│       └── convert-and-validate.yml
+│
 └── shared/
     └── context/               # Persistent context storage
-        └── swarm-converter/   # Agent-specific context
+        ├── swarm-converter/   # Agent-specific context
+        └── swarm-validator/
 ```
 
-## Base Agent: Swarm Converter
+## Base Agents
+
+### Swarm Converter
 
 The swarm-converter agent converts Docker Compose files to Docker Swarm stack files.
+
+**Endpoint**: http://localhost:7001
+
+### Swarm Validator
+
+The swarm-validator agent validates Docker Swarm stack files for correctness and best practices.
+
+**Endpoint**: http://localhost:7002
 
 ### Features
 
@@ -359,6 +446,93 @@ validation = await call_agent("http://agent-validator:8000", converted)
 ```
 
 For detailed examples and patterns, see [INTER-AGENT-COMMUNICATION.md](INTER-AGENT-COMMUNICATION.md).
+
+## Creating Workflows
+
+Workflows allow you to chain multiple agents together through the Backoffice. They are defined in YAML format and stored in `backoffice/workflows/`.
+
+### Workflow Format
+
+```yaml
+name: workflow-name
+description: What this workflow does
+version: 1.0.0
+
+steps:
+  - name: step-name
+    agent: agent-name        # Name from agent registry
+    input: original          # Input source (see below)
+    timeout: 300             # Optional timeout in seconds
+    retry: 1                 # Optional number of retries
+    on_error: stop           # stop, continue, or skip
+
+metadata:
+  author: Your Name
+  tags: [docker, validation]
+```
+
+### Input Sources
+
+- **`original`** - Use the initial workflow input
+- **`previous`** - Use output from the previous step (default)
+- **`step[N]`** - Use output from step N (0-indexed)
+- Direct string - Any other value is used as literal input
+
+### Error Handling
+
+- **`stop`** - Stop workflow execution on error (default)
+- **`continue`** - Continue to next step even if this step fails
+- **`skip`** - Skip remaining steps if this step fails
+
+### Example: Sequential Pipeline
+
+```yaml
+name: convert-and-validate
+description: Convert docker-compose to swarm and validate it
+version: 1.0.0
+
+steps:
+  - name: convert-to-swarm
+    agent: swarm-converter
+    input: original
+    timeout: 300
+    retry: 1
+    on_error: stop
+
+  - name: validate-swarm-stack
+    agent: swarm-validator
+    input: previous
+    timeout: 300
+    retry: 1
+    on_error: stop
+```
+
+### Managing Workflows
+
+**Via Web UI:**
+1. Go to http://localhost:8080
+2. Click the **Workflows** tab
+3. Click **Create** button
+4. Fill in the workflow details and YAML
+
+**Via File System:**
+1. Create a YAML file in `backoffice/workflows/`
+2. Refresh the Workflows tab in the UI
+3. The workflow appears automatically
+
+**Via API:**
+```bash
+curl -X POST http://localhost:8080/api/workflows \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-workflow",
+    "description": "My custom workflow",
+    "version": "1.0.0",
+    "steps": [...]
+  }'
+```
+
+For more examples and advanced patterns, see [backoffice/workflows/README.md](backoffice/workflows/README.md).
 
 ## Adding New Agents
 

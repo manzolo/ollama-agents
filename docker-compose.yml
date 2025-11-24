@@ -33,9 +33,9 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: [ "CMD", "ollama", "list" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -71,7 +71,82 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ==========================================================================
+  # VALIDATOR AGENT: SWARM-VALIDATOR
+  # ==========================================================================
+  # Validates Docker Swarm stack files
+  # Endpoint: http://localhost:7002/process
+  # ==========================================================================
+  swarm-validator:
+    build:
+      context: ./agents/base
+      dockerfile: Dockerfile
+    container_name: agent-swarm-validator
+    restart: unless-stopped
+    ports:
+      - "${SWARM_VALIDATOR_PORT:-7002}:8000"
+    volumes:
+      - ./agents/swarm-validator/prompt.txt:/app/prompt.txt:ro
+      - ./agents/swarm-validator/config.yml:/app/config.yml:ro
+      - ./shared/context/swarm-validator:/app/context
+    networks:
+      - agent-network
+    environment:
+      - AGENT_NAME=swarm-validator
+      - OLLAMA_HOST=http://ollama:11434
+      - MODEL_NAME=${SWARM_VALIDATOR_MODEL:-llama3.2}
+      - TEMPERATURE=${SWARM_VALIDATOR_TEMPERATURE:-0.1}
+      - MAX_TOKENS=${SWARM_VALIDATOR_MAX_TOKENS:-4096}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ==========================================================================
+  # BACKOFFICE - Web UI & Workflow Manager
+  # ==========================================================================
+  # Multi-agent workflow management system
+  # Web UI: http://localhost:8080
+  # API: http://localhost:8080/api
+  # ==========================================================================
+  backoffice:
+    build:
+      context: ./backoffice
+      dockerfile: Dockerfile
+    container_name: backoffice
+    restart: unless-stopped
+    ports:
+      - "${BACKOFFICE_PORT:-8080}:8000"
+    volumes:
+      - ./backoffice/workflows:/app/workflows
+      - ./backoffice/backend/orchestrator.py:/app/orchestrator.py:ro
+      - ./backoffice/backend/app.py:/app/app.py:ro
+      - ./backoffice/frontend:/app/frontend:ro
+    networks:
+      - agent-network
+    environment:
+      - WORKFLOWS_DIR=/app/workflows
+      - FRONTEND_DIR=/app/frontend
+      - SWARM_CONVERTER_URL=http://agent-swarm-converter:8000
+      - SWARM_VALIDATOR_URL=http://agent-swarm-validator:8000
+    depends_on:
+      swarm-converter:
+        condition: service_healthy
+      swarm-validator:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -133,9 +208,9 @@ services:
   #     ollama:
   #       condition: service_healthy
 
-# ============================================================================
-# NETWORKS
-# ============================================================================
+  # ============================================================================
+  # NETWORKS
+  # ============================================================================
 networks:
   agent-network:
     driver: bridge
