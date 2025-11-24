@@ -568,7 +568,7 @@ code {
 }
 
 .toast {
-    background: white;
+    background: var(--card-bg);
     padding: 16px 20px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -655,6 +655,7 @@ code {
         transform: translateX(400px);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -666,6 +667,7 @@ code {
         transform: translateX(0);
         opacity: 1;
     }
+
     to {
         transform: translateX(400px);
         opacity: 0;
@@ -695,7 +697,7 @@ code {
 }
 
 .confirm-dialog-content {
-    background: white;
+    background: var(--card-bg);
     border-radius: 12px;
     padding: 24px;
     max-width: 400px;
@@ -741,7 +743,7 @@ code {
 }
 
 .prompt-dialog-content {
-    background: white;
+    background: var(--card-bg);
     border-radius: 12px;
     padding: 24px;
     max-width: 450px;
