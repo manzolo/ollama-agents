@@ -7,10 +7,25 @@
 make init
 
 # This will:
-# - Build all containers
-# - Start Ollama + swarm-converter agent
+# - Build all containers (agents + backoffice)
+# - Start Ollama, agents, and backoffice
 # - Pull llama3.2 model
 # - Show service status
+```
+
+## Access the Backoffice Web UI
+
+The easiest way to use the system:
+
+```bash
+# 1. Open your browser
+open http://localhost:8080
+
+# The Backoffice provides:
+# - Agents tab: View and test all agents
+# - Workflows tab: Create and manage workflows
+# - Execute tab: Run workflows with custom input
+# - History tab: Review past executions
 ```
 
 ## Daily Usage
@@ -22,7 +37,10 @@ make up
 # Check status
 make health
 
-# Test the swarm-converter agent
+# Access backoffice
+open http://localhost:8080
+
+# Or test agents directly
 make test-agent agent=swarm-converter
 
 # View logs
@@ -176,19 +194,61 @@ make clean
 make init
 ```
 
+## Create and Run Workflows
+
+The backoffice allows you to chain multiple agents:
+
+```bash
+# 1. Access the backoffice
+open http://localhost:8080
+
+# 2. Go to Workflows tab
+
+# 3. Click "Run" on the example workflow: convert-and-validate
+
+# 4. Paste a docker-compose.yml content in the input
+
+# 5. Click "Execute Workflow"
+
+# 6. Watch the real-time execution!
+```
+
+You can also create workflows via YAML files:
+
+```bash
+# Create a workflow file
+cat > backoffice/workflows/my-workflow.yml << 'EOF'
+name: my-workflow
+description: My custom workflow
+version: 1.0.0
+
+steps:
+  - name: step1
+    agent: swarm-converter
+    input: original
+  - name: step2
+    agent: swarm-validator
+    input: previous
+EOF
+
+# Refresh the Workflows tab - it appears automatically!
+```
+
 ## Port Map
 
+- `8080` - **Backoffice Web UI** (main interface)
 - `11434` - Ollama API
 - `7001` - swarm-converter agent
-- `7002+` - Your custom agents
+- `7002` - swarm-validator agent
+- `7003+` - Your custom agents
 
 ## Next Steps
 
-1. Read the full [README.md](README.md)
-2. Customize the swarm-converter prompt
-3. Add your own specialized agents
-4. Explore inter-agent communication
-5. Set up production deployment
+1. **Read** [BACKOFFICE-GUIDE.md](BACKOFFICE-GUIDE.md) for complete workflow documentation
+2. **Explore** the backoffice UI at http://localhost:8080
+3. **Create** custom workflows for your use cases
+4. **Add** your own specialized agents
+5. **Read** the full [README.md](README.md) for advanced topics
 
 ## Tips
 

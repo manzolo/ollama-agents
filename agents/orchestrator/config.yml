@@ -1,3 +1,0 @@
-agent:
-  name: orchestrator
-  description: Orchestrates the conversion and validation pipeline.

@@ -114,40 +114,44 @@ services:
       start_period: 20s
 
   # ==========================================================================
-  # ORCHESTRATOR AGENT
+  # BACKOFFICE - Web UI & Workflow Manager
   # ==========================================================================
-  # Chains Swarm Converter and Swarm Validator
-  # Endpoint: http://localhost:7003/process
+  # Multi-agent workflow management system
+  # Web UI: http://localhost:8080
+  # API: http://localhost:8080/api
   # ==========================================================================
-  orchestrator:
+  backoffice:
     build:
-      context: ./agents/base
+      context: ./backoffice
       dockerfile: Dockerfile
-    container_name: agent-orchestrator
+    container_name: backoffice
     restart: unless-stopped
     ports:
-      - "${ORCHESTRATOR_PORT:-7003}:8000"
+      - "${BACKOFFICE_PORT:-8080}:8000"
     volumes:
-      - ./agents/orchestrator/app.py:/app/app.py:ro
-      - ./agents/orchestrator/config.yml:/app/config.yml:ro
-      - ./shared/context/orchestrator:/app/context
+      - ./backoffice/workflows:/app/workflows
+      - ./backoffice/backend/orchestrator.py:/app/orchestrator.py:ro
+      - ./backoffice/backend/app.py:/app/app.py:ro
+      - ./backoffice/frontend:/app/frontend:ro
     networks:
       - agent-network
     environment:
-      - AGENT_NAME=orchestrator
-      - SWARM_CONVERTER_URL=http://agent-swarm-converter:8000/process/raw
-      - SWARM_VALIDATOR_URL=http://agent-swarm-validator:8000/process/raw
+      - WORKFLOWS_DIR=/app/workflows
+      - FRONTEND_DIR=/app/frontend
+      - SWARM_CONVERTER_URL=http://agent-swarm-converter:8000
+      - SWARM_VALIDATOR_URL=http://agent-swarm-validator:8000
     depends_on:
       swarm-converter:
         condition: service_healthy
       swarm-validator:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+
   # ==========================================================================
   # ADDITIONAL AGENTS - ADD YOUR CUSTOM AGENTS BELOW
   # ==========================================================================

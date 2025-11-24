@@ -2,55 +2,71 @@
 
 ## What Was Built
 
-A complete, production-ready modular architecture for deploying multiple AI agents powered by Ollama with Docker Compose.
+A complete, production-ready modular architecture for deploying multiple AI agents powered by Ollama with Docker Compose, featuring a **Backoffice Web UI** for workflow orchestration.
 
 ## Project Status
 
 ✅ **FULLY OPERATIONAL**
 
-- Ollama service: Running with GPU support (RTX 3080 Ti)
-- Swarm-converter agent: Running and tested successfully
-- Model: llama3.2 pulled and ready
-- All services healthy
+- **Backoffice Web UI**: Running at http://localhost:8080
+- **Ollama service**: Running with GPU support
+- **Swarm-converter agent**: Docker Compose to Swarm converter
+- **Swarm-validator agent**: Swarm stack validator
+- **Workflow system**: YAML-based multi-agent orchestration
+- **Model**: llama3.2 pulled and ready
+- **All services**: Healthy and tested
 
 ## Quick Test
 
 ```bash
-# Test the agent
-./test-agent.sh test-compose.yml
+# Access the Backoffice Web UI (easiest way)
+open http://localhost:8080
 
-# Or use make
+# Or test agents directly
+./test-agent.sh test-compose.yml
 make test-agent agent=swarm-converter
 
-# Or use curl directly
+# Or use curl
 curl -X POST http://localhost:7001/process \
   -H "Content-Type: application/json" \
   -d '{"input": "version: \"3.8\"\nservices:\n  web:\n    build: .\n    restart: always"}' \
   | jq -r '.output'
+
+# Execute a workflow via API
+curl -X POST http://localhost:8080/api/workflows/execute \
+  -H "Content-Type: application/json" \
+  -d '{"workflow_name": "convert-and-validate", "input": "..."}' | jq .
 ```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│     Ollama Engine (GPU-Enabled)     │
-│         Port: 11434                 │
-│      Model: llama3.2 (2GB)          │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────────┐
-│    Swarm-Converter Agent             │
-│         Port: 7001                   │
-│    FastAPI + Python 3.11             │
-│                                      │
-│  Endpoints:                          │
-│  - GET  /health                      │
-│  - GET  /info                        │
-│  - POST /process                     │
-│  - GET  /context                     │
-│  - DELETE /context                   │
-└──────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│           Backoffice Web UI (:8080)              │
+│  - Workflow Management  - Agent Discovery        │
+│  - Visual Execution     - History Tracking       │
+└──────────────────────┬───────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────┐
+│         Ollama Engine (GPU-Enabled)              │
+│              Port: 11434                         │
+│           Model: llama3.2 (2GB)                  │
+└────────────┬─────────────┬───────────────────────┘
+             │             │
+             ▼             ▼
+┌──────────────────┐  ┌──────────────────┐
+│ Swarm-Converter  │  │ Swarm-Validator  │
+│   Port: 7001     │  │   Port: 7002     │
+│  FastAPI Agent   │  │  FastAPI Agent   │
+└──────────────────┘  └──────────────────┘
+
+Each Agent provides:
+- GET  /health    - Health check
+- GET  /info      - Agent metadata
+- POST /process   - Main processing
+- GET  /context   - View history
+- DELETE /context - Clear context
 ```
 
 ## File Structure
@@ -59,36 +75,72 @@ curl -X POST http://localhost:7001/process \
 ollama-agents/
 ├── agents/
 │   ├── base/                    # Reusable FastAPI application
-│   │   ├── app.py              # 350+ lines of Python
+│   │   ├── app.py              # 750+ lines of Python
 │   │   ├── Dockerfile          # Python 3.11 slim
 │   │   └── requirements.txt    # FastAPI, httpx, pydantic
-│   ├── swarm-converter/        # Docker Swarm conversion agent
+│   ├── swarm-converter/        # Docker Compose to Swarm converter
 │   │   ├── prompt.txt          # Specialized AI instructions
+│   │   └── config.yml          # Agent configuration
+│   ├── swarm-validator/        # Swarm stack validator
+│   │   ├── prompt.txt          # Validation instructions
 │   │   └── config.yml          # Agent configuration
 │   └── .agent-template/        # Template for new agents
 │       ├── prompt.txt
 │       └── config.yml
+├── backoffice/                  # Workflow management system
+│   ├── Dockerfile              # Backoffice container
+│   ├── README.md               # Detailed documentation
+│   ├── backend/                # FastAPI server
+│   │   ├── app.py             # API server (400+ lines)
+│   │   ├── orchestrator.py    # Workflow engine (400+ lines)
+│   │   └── requirements.txt   # Dependencies
+│   ├── frontend/               # Web UI
+│   │   ├── index.html         # Main page
+│   │   ├── app.js             # 600+ lines of JavaScript
+│   │   └── styles.css         # 750+ lines of CSS
+│   └── workflows/              # Workflow definitions (YAML)
+│       └── convert-and-validate.yml
 ├── shared/
 │   └── context/                # Context memory storage
-│       └── swarm-converter/    # Agent-specific history
+│       ├── swarm-converter/    # Agent-specific history
+│       └── swarm-validator/
 ├── docker-compose.yml          # Main orchestration (GPU-enabled)
 ├── .env                        # Environment configuration
 ├── Makefile                    # 30+ convenience commands
-├── README.md                   # Full documentation
+├── README.md                   # Full documentation (1000+ lines)
 ├── QUICKSTART.md               # Quick reference
+├── BACKOFFICE-GUIDE.md         # Complete backoffice guide
 ├── test-agent.sh               # Test script
 └── test-compose.yml            # Sample test file
 ```
 
 ## Key Features Implemented
 
-### 1. Modular Agent Architecture
+### 1. Backoffice Web UI (NEW!)
+**Purpose**: Visual interface for workflow orchestration
+
+**Features**:
+- 🤖 Agent Discovery - Auto-detect and monitor all agents
+- 🔄 Workflow Management - Create/edit/delete workflows
+- ▶️ Visual Execution - Run workflows with real-time progress
+- 📊 Execution History - Track all workflow runs
+- 🎨 Modern UI - Toast notifications, custom dialogs
+- 🔗 REST API - Full programmatic access
+
+**Technology**:
+- Backend: FastAPI + Python 3.11
+- Frontend: Vanilla JavaScript (no frameworks!)
+- Workflow Engine: YAML-based orchestration
+- Storage: File-based workflow definitions
+
+### 2. Modular Agent Architecture
 - One shared Ollama service
 - Each agent runs independently
 - Easy to add new agents (template-based)
 - Isolated context storage
+- Agents communicate via `/process/raw` endpoint
 
-### 2. Swarm-Converter Agent
+### 3. Swarm-Converter Agent
 **Purpose**: Converts docker-compose.yml to Docker Swarm stack files
 
 **Capabilities**:
@@ -99,11 +151,49 @@ ollama-agents/
 - Provides conversion notes and warnings
 
 **Configuration**:
-- Temperature: 0.3 (precise, technical)
-- Max tokens: 8192 (for large YAML files)
+- Temperature: 0.7 (balanced)
+- Max tokens: 4096
 - Model: llama3.2
 
-### 3. Complete REST API
+### 4. Swarm-Validator Agent (NEW!)
+**Purpose**: Validates Docker Swarm stack files
+
+**Capabilities**:
+- Syntax validation
+- Best practices check
+- Security audit
+- Provides validation score (0-100)
+- Lists errors and warnings
+
+**Configuration**:
+- Temperature: 0.1 (very precise)
+- Max tokens: 4096
+- Model: llama3.2
+
+### 5. Workflow System (NEW!)
+**Purpose**: Chain multiple agents in pipelines
+
+**Features**:
+- YAML-based workflow definitions
+- Sequential step execution
+- Flexible input routing (original, previous, step[N])
+- Error handling (stop, continue, skip)
+- Automatic retries with exponential backoff
+- Execution history tracking
+
+**Example Workflow**:
+```yaml
+name: convert-and-validate
+steps:
+  - name: convert
+    agent: swarm-converter
+    input: original
+  - name: validate
+    agent: swarm-validator
+    input: previous
+```
+
+### 6. Complete REST API
 Each agent provides:
 - `POST /process` - Main AI processing
 - `GET /health` - Health check with Ollama connectivity
@@ -261,9 +351,11 @@ SWARM_CONVERTER_MAX_TOKENS=8192
    - Suggests optimizations
    - Security review
 
-### Advanced Features to Add:
+### Advanced Features:
 
-- [ ] Agent orchestration (multi-agent workflows)
+- [x] Agent orchestration (multi-agent workflows) - **COMPLETED!**
+- [x] Web UI for agent management - **COMPLETED!**
+- [x] Workflow execution history - **COMPLETED!**
 - [ ] Streaming responses
 - [ ] WebSocket support
 - [ ] Authentication/authorization
@@ -334,6 +426,14 @@ Built with:
 
 ---
 
-**Status**: ✅ Production Ready
-**Last Updated**: 2025-11-23
-**Version**: 1.0.0
+**Status**: ✅ Production Ready with Backoffice
+**Last Updated**: 2025-11-24
+**Version**: 2.0.0
+
+**Major Features Added in v2.0.0**:
+- ✅ Backoffice Web UI for workflow orchestration
+- ✅ Swarm-validator agent
+- ✅ YAML-based workflow system
+- ✅ Visual execution monitoring
+- ✅ Toast notifications and modern dialogs
+- ✅ Execution history tracking
