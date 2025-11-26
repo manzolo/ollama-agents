@@ -7,49 +7,61 @@ I've created a **Dynamic Workflow Orchestrator** - a complete web-based backoffi
 ## Key Features
 
 ### 1. **Web UI** (http://localhost:8080)
+
 A modern, responsive interface with 4 main sections:
 
-> <img width="1435" height="824" alt="image" src="https://github.com/user-attachments/assets/2c3bb16d-3d6f-41aa-8f19-074558932268" />
-Main Backoffice UI showing all 4 tabs (Agents, Workflows, Execute, History)
+#### Main Interface
 
-- **Agents Tab**: Discover and test all available agents
-  - Real-time health monitoring
-  - Agent capabilities display
-  - Quick test functionality
+<div align="center">
+  <img width="900" alt="Main Backoffice UI" src="https://github.com/user-attachments/assets/2c3bb16d-3d6f-41aa-8f19-074558932268" />
+  <p><em>Main Backoffice UI showing all 4 tabs (Agents, Workflows, Execute, History)</em></p>
+</div>
 
-> <img width="1435" height="630" alt="image" src="https://github.com/user-attachments/assets/0f615fee-372a-476e-b35c-ac5634f1bbac" />
-Agents tab showing agent list with health status and capabilities
+#### Agents Tab
 
-> <img width="798" height="782" alt="image" src="https://github.com/user-attachments/assets/91d3f46e-1469-409d-a2fc-c971ea60a963" />
-Agent creation
+Discover and test all available agents with real-time health monitoring, agent capabilities display, and quick test functionality.
 
-> <img width="1435" height="630" alt="image" src="https://github.com/user-attachments/assets/c163f36e-a6df-4268-aa25-818930c1ad73" />
-Manage workflow definitions
-  - Create new workflows via UI
-  - View workflow details
-  - Delete workflows
-  - Run workflows directly
+<div align="center">
+  <img width="900" alt="Agents Tab" src="https://github.com/user-attachments/assets/0f615fee-372a-476e-b35c-ac5634f1bbac" />
+  <p><em>Agents tab showing agent list with health status and capabilities</em></p>
+</div>
 
-> <img width="1435" height="728" alt="image" src="https://github.com/user-attachments/assets/19691632-43e2-40b5-b486-daf30618d7c7" />
-Workflows tab showing available workflows and management options
+<div align="center">
+  <img width="600" alt="Agent Creation Dialog" src="https://github.com/user-attachments/assets/91d3f46e-1469-409d-a2fc-c971ea60a963" />
+  <p><em>Creating a new agent via the web interface</em></p>
+</div>
 
-- **Execute Tab**: Run workflows with custom input
-  - Select workflow from dropdown
-  - Enter input data
-  - View real-time execution results
-  - See step-by-step progress
+#### Workflows Tab
 
-> <img width="1435" height="740" alt="image" src="https://github.com/user-attachments/assets/c2a832b9-79a0-4f59-9a0f-cc4b6560b60d" />
-Execute tab showing workflow execution in progress with real-time results
+Manage workflow definitions - create new workflows via UI, view workflow details, delete workflows, and run workflows directly.
 
-- **History Tab**: Review past executions
-  - Execution status and duration
-  - Step-by-step breakdown
-  - Error details
-  - Expandable results view
+<div align="center">
+  <img width="900" alt="Workflow Management" src="https://github.com/user-attachments/assets/c163f36e-a6df-4268-aa25-818930c1ad73" />
+  <p><em>Workflow management interface</em></p>
+</div>
 
-> <img width="1435" height="640" alt="image" src="https://github.com/user-attachments/assets/da869587-c57b-4753-a7f9-5ac691622868" />
-History tab showing past workflow executions with status and details
+<div align="center">
+  <img width="900" alt="Workflows Tab" src="https://github.com/user-attachments/assets/19691632-43e2-40b5-b486-daf30618d7c7" />
+  <p><em>Workflows tab showing available workflows and management options</em></p>
+</div>
+
+#### Execute Tab
+
+Run workflows with custom input - select workflow from dropdown, enter input data, view real-time execution results, and see step-by-step progress.
+
+<div align="center">
+  <img width="900" alt="Execute Tab" src="https://github.com/user-attachments/assets/c2a832b9-79a0-4f59-9a0f-cc4b6560b60d" />
+  <p><em>Execute tab showing workflow execution in progress with real-time results</em></p>
+</div>
+
+#### History Tab
+
+Review past executions with execution status and duration, step-by-step breakdown, error details, and expandable results view.
+
+<div align="center">
+  <img width="900" alt="History Tab" src="https://github.com/user-attachments/assets/da869587-c57b-4753-a7f9-5ac691622868" />
+  <p><em>History tab showing past workflow executions with status and details</em></p>
+</div>
 
 ### 2. **REST API** (http://localhost:8080/api)
 Complete API for programmatic access:
