@@ -208,12 +208,26 @@ networks:
                 }
             }
 
-            with open(agent_dir / "config.yml", "w") as f:
+            config_file = agent_dir / "config.yml"
+            with open(config_file, "w") as f:
                 yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+                f.flush()
+                os.fsync(f.fileno())  # Force write to disk
+
+            # Verify config.yml was created and is a file
+            if not config_file.is_file():
+                raise Exception(f"Failed to create config.yml as a file at {config_file}")
 
             # Create prompt.txt
-            with open(agent_dir / "prompt.txt", "w") as f:
+            prompt_file = agent_dir / "prompt.txt"
+            with open(prompt_file, "w") as f:
                 f.write(agent_definition["system_prompt"])
+                f.flush()
+                os.fsync(f.fileno())  # Force write to disk
+
+            # Verify prompt.txt was created and is a file
+            if not prompt_file.is_file():
+                raise Exception(f"Failed to create prompt.txt as a file at {prompt_file}")
 
             # Create plugin.yml
             plugin_data = {
@@ -262,13 +276,35 @@ networks:
                 }
             }
 
-            with open(agent_dir / "plugin.yml", "w") as f:
+            plugin_file = agent_dir / "plugin.yml"
+            with open(plugin_file, "w") as f:
                 yaml.dump(plugin_data, f, default_flow_style=False, sort_keys=False)
+                f.flush()
+                os.fsync(f.fileno())  # Force write to disk
+
+            # Verify plugin.yml was created and is a file
+            if not plugin_file.is_file():
+                raise Exception(f"Failed to create plugin.yml as a file at {plugin_file}")
+
+            # Final verification: ensure all required files exist and are files
+            required_files = [config_file, prompt_file, plugin_file]
+            for file_path in required_files:
+                if not file_path.exists():
+                    raise Exception(f"Required file does not exist: {file_path}")
+                if not file_path.is_file():
+                    raise Exception(f"Path exists but is not a file: {file_path}")
+
+            print(f"✓ Agent files created successfully for {agent_name}")
+            print(f"  - config.yml: {config_file}")
+            print(f"  - prompt.txt: {prompt_file}")
+            print(f"  - plugin.yml: {plugin_file}")
 
             return True
 
         except Exception as e:
             print(f"Error creating agent files: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def update_docker_compose(self, agent_definition: Dict[str, Any]) -> bool:
@@ -346,6 +382,11 @@ networks:
             if self.docker_client:
                 result["steps"].append({"step": "build_container", "status": "running"})
 
+                # Small delay to ensure filesystem has synced (especially important in containers)
+                import time
+                print("⏳ Waiting for filesystem to sync...")
+                time.sleep(2)
+
                 # Detect GPU mode
                 gpu_mode = self.detect_gpu_mode()
 
@@ -364,6 +405,18 @@ networks:
                     subprocess.run(rm_cmd, cwd=self.project_root, check=False, capture_output=True)
                 except Exception:
                     pass  # Ignore if container doesn't exist
+
+                # Verify files exist on host before starting container
+                agent_dir = self.agents_dir / agent_name
+                host_agent_dir = self.host_project_root / "runtime" / "agents" / agent_name
+                required_files = ["config.yml", "prompt.txt", "plugin.yml"]
+
+                print(f"🔍 Verifying files exist before container start...")
+                for filename in required_files:
+                    file_path = agent_dir / filename
+                    if not file_path.is_file():
+                        raise Exception(f"Required file missing before container start: {file_path}")
+                    print(f"  ✓ {filename} exists")
 
                 # Start the service with force-recreate to avoid mount issues
                 result["steps"].append({"step": "start_container", "status": "running"})
