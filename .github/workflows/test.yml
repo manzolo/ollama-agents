@@ -23,13 +23,14 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl
+          sudo apt-get install -y jq curl make
 
       - name: Create required directories
         run: |
           mkdir -p shared/context/swarm-converter
           mkdir -p shared/context/swarm-validator
           mkdir -p backoffice/workflows
+          touch .env.agents
 
       - name: Build services
         run: |
@@ -39,7 +40,7 @@ jobs:
 
       - name: Start Ollama service
         run: |
-          docker compose up -d ollama
+          make up
           echo "Waiting for Ollama to be ready..."
           sleep 10
 
