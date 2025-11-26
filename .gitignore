@@ -53,3 +53,14 @@ logs/
 temp/
 tmp/
 TODO.txt
+# Runtime-generated agent compose files - ignore all except base agents
+docker-compose.agents/*
+!docker-compose.agents/README.md
+!docker-compose.agents/swarm-converter.yml
+!docker-compose.agents/swarm-validator.yml
+
+# Agent definitions - ignore all except base agents
+backoffice/agent-definitions/*
+!backoffice/agent-definitions/README.md
+!backoffice/agent-definitions/swarm-converter.yml
+!backoffice/agent-definitions/swarm-validator.yml

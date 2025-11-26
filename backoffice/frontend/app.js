@@ -239,6 +239,49 @@ const Dialog = {
                 }
             };
         });
+    },
+
+    alert(message, title = 'Alert') {
+        return new Promise((resolve) => {
+            const dialog = document.getElementById('confirm-dialog');
+            const titleEl = document.getElementById('confirm-title');
+            const messageEl = document.getElementById('confirm-message');
+            const okBtn = document.getElementById('confirm-ok');
+            const cancelBtn = document.getElementById('confirm-cancel');
+
+            titleEl.textContent = title;
+            // Support HTML content
+            if (message.includes('<')) {
+                messageEl.innerHTML = message;
+            } else {
+                messageEl.textContent = message;
+            }
+
+            dialog.classList.add('active');
+
+            // Hide cancel button for alert
+            cancelBtn.style.display = 'none';
+
+            const cleanup = () => {
+                dialog.classList.remove('active');
+                cancelBtn.style.display = '';
+                okBtn.onclick = null;
+                messageEl.innerHTML = '';
+            };
+
+            okBtn.onclick = () => {
+                cleanup();
+                resolve(true);
+            };
+
+            // Close on backdrop click
+            dialog.onclick = (e) => {
+                if (e.target === dialog) {
+                    cleanup();
+                    resolve(true);
+                }
+            };
+        });
     }
 };
 
@@ -251,9 +294,12 @@ const app = {
         currentTab: 'agents'
     },
 
+    // Store step outputs for copying (indexed by step ID)
+    stepOutputs: {},
+
     // Initialize
     init() {
-        console.log('Initializing Backoffice App...');
+        //console.log('Initializing Backoffice App...');
         this.setupTabs();
         this.setupForms();
         this.loadAgents();
@@ -306,6 +352,18 @@ const app = {
             e.preventDefault();
             await this.createWorkflow();
         });
+
+        // Create agent form
+        document.getElementById('create-agent-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.createAgent();
+        });
+
+        // Prompt assistant form
+        document.getElementById('prompt-assistant-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.generatePrompt();
+        });
     },
 
     // API Calls
@@ -342,7 +400,8 @@ const app = {
             this.state.agents = data.agents;
             this.renderAgents();
         } catch (error) {
-            container.innerHTML = '<div class="alert alert-error">Failed to load agents</div>';
+            console.error('Error loading agents:', error);
+            container.innerHTML = `<div class="alert alert-error">Failed to load agents: ${error.message}</div>`;
         }
     },
 
@@ -373,8 +432,20 @@ const app = {
                         </div>
                     ` : ''}
                     ${agent.status === 'healthy' ? `
+                        <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button onclick="app.testAgent('${name}')" class="btn btn-small btn-primary">Test</button>
+                            <button onclick="app.restartAgent('${name}')" class="btn btn-small btn-secondary">🔄 Restart</button>
+                            <button onclick="app.stopAgent('${name}')" class="btn btn-small btn-secondary">⏹ Stop</button>
+                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger">🗑 Delete</button>
+                        </div>
+                    ` : agent.status === 'stopped' ? `
+                        <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button onclick="app.startAgent('${name}')" class="btn btn-small btn-success">▶ Start</button>
+                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger">🗑 Delete</button>
+                        </div>
+                    ` : agent.status === 'starting' ? `
                         <div style="margin-top: 15px;">
-                            <button onclick="app.testAgent('${name}')" class="btn btn-small btn-primary">Test Agent</button>
+                            <span style="color: var(--warning);">⏳ Starting...</span>
                         </div>
                     ` : ''}
                 </div>
@@ -397,11 +468,287 @@ const app = {
                 })
             });
 
+            // Show result in a dialog
+            const resultHtml = `
+                <div style="max-height: 60vh; overflow-y: auto;">
+                    <h3 style="margin-top: 0;">Agent Response</h3>
+                    <div style="margin-bottom: 15px;">
+                        <strong>Agent:</strong> ${agentName}<br>
+                        <strong>Status:</strong> <span style="color: #10b981;">Success</span>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <strong>Input:</strong>
+                        <pre style="background: var(--bg-color); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word;">${testInput}</pre>
+                    </div>
+                    <div>
+                        <strong>Output:</strong>
+                        <pre style="background: var(--bg-color); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word;">${result.output || JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                </div>
+            `;
+
+            await Dialog.alert(resultHtml, 'Test Result');
             Toast.success(`Agent ${agentName} responded successfully!`);
-            console.log('Agent Response:', result);
         } catch (error) {
             // Error already shown by apiCall
         }
+    },
+
+    showCreateAgent() {
+        document.getElementById('create-agent-modal').classList.add('active');
+    },
+
+    hideCreateAgent() {
+        document.getElementById('create-agent-modal').classList.remove('active');
+        document.getElementById('create-agent-form').reset();
+        // Reset temperature display
+        document.getElementById('temperature-value').textContent = '0.7';
+    },
+
+    async createAgent() {
+        const name = document.getElementById('agent-name').value.trim();
+        const description = document.getElementById('agent-description').value.trim();
+        const port = parseInt(document.getElementById('agent-port').value);
+        const model = document.getElementById('agent-model').value;
+        const temperature = parseFloat(document.getElementById('agent-temperature').value);
+        const maxTokens = parseInt(document.getElementById('agent-max-tokens').value);
+        const capabilitiesStr = document.getElementById('agent-capabilities').value.trim();
+        const systemPrompt = document.getElementById('agent-prompt').value.trim();
+
+        // Parse capabilities
+        const capabilities = capabilitiesStr
+            ? capabilitiesStr.split(',').map(c => c.trim()).filter(c => c)
+            : [];
+
+        // Validate
+        if (!name.match(/^[a-z0-9-]+$/)) {
+            Toast.error('Agent name must contain only lowercase letters, numbers, and hyphens');
+            return;
+        }
+
+        try {
+            const result = await this.apiCall('/agents/create', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name,
+                    description,
+                    port,
+                    model,
+                    temperature,
+                    max_tokens: maxTokens,
+                    capabilities,
+                    system_prompt: systemPrompt
+                })
+            });
+
+            Toast.success(`Agent "${name}" definition created successfully!`);
+            //console.log('Agent Creation Result:', result);
+
+            // Offer to deploy immediately
+            const deployNow = await Dialog.confirm(
+                `Agent definition created!\n\nDo you want to deploy it now?`,
+                'Deploy Agent'
+            );
+
+            if (deployNow) {
+                this.hideCreateAgent();
+                await this.deployAgentDefinition(name);
+            } else {
+                this.hideCreateAgent();
+            }
+
+            this.loadAgents();
+            this.loadAgentDefinitions();
+        } catch (error) {
+            // Error already shown by apiCall
+            console.error('Agent creation failed:', error);
+        }
+    },
+
+    async loadAgentDefinitions() {
+        try {
+            const data = await this.apiCall('/agents/definitions');
+            this.state.agentDefinitions = data.definitions || [];
+            this.renderAgentDefinitions();
+        } catch (error) {
+            console.error('Failed to load agent definitions:', error);
+        }
+    },
+
+    renderAgentDefinitions() {
+        // This will be called to show pending deployments
+        const pending = this.state.agentDefinitions.filter(d => d.status === 'defined');
+        if (pending.length > 0) {
+            // Could show a notification or section for pending deployments
+            console.log(`${pending.length} agent(s) pending deployment`);
+        }
+    },
+
+    async deployAgentDefinition(agentName) {
+        Toast.info(`Deploying ${agentName}... This may take 1-2 minutes.`);
+
+        try {
+            const result = await this.apiCall(`/agents/${agentName}/deploy`, {
+                method: 'POST'
+            });
+
+            if (result.status === 'success') {
+                Toast.success(`Agent "${agentName}" deployed successfully!` +
+                    (result.gpu_mode ? ' (GPU mode detected)' : ''));
+                this.loadAgents();
+            } else {
+                Toast.warning(`Agent deployed with issues: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Deployment failed:', error);
+        }
+    },
+
+    async restartAgent(agentName) {
+        const confirmed = await Dialog.confirm(
+            `Restart agent "${agentName}"?`,
+            'Restart Agent'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            await this.apiCall(`/agents/${agentName}/restart`, {
+                method: 'POST'
+            });
+            Toast.success(`Agent "${agentName}" restarted successfully!`);
+            setTimeout(() => this.loadAgents(), 2000);
+        } catch (error) {
+            console.error('Restart failed:', error);
+        }
+    },
+
+    async stopAgent(agentName) {
+        const confirmed = await Dialog.confirm(
+            `Stop agent "${agentName}"?`,
+            'Stop Agent'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            await this.apiCall(`/agents/${agentName}/stop`, {
+                method: 'POST'
+            });
+            Toast.success(`Agent "${agentName}" stopped successfully!`);
+            setTimeout(() => this.loadAgents(), 2000);
+        } catch (error) {
+            console.error('Stop failed:', error);
+        }
+    },
+
+    async startAgent(agentName) {
+        Toast.info(`Starting agent "${agentName}"...`);
+
+        try {
+            const result = await this.apiCall(`/agents/${agentName}/start`, {
+                method: 'POST'
+            });
+            Toast.success(result.message || `Agent "${agentName}" started successfully!`);
+            setTimeout(() => this.loadAgents(), 2000);
+        } catch (error) {
+            console.error('Start failed:', error);
+        }
+    },
+
+    async deleteAgent(agentName) {
+        const confirmed = await Dialog.confirm(
+            `⚠️ WARNING: This will permanently delete agent "${agentName}"!\n\nThis will remove:\n- Container\n- Configuration files\n- docker-compose.yml entry\n- Environment variables\n\nAre you absolutely sure?`,
+            'Delete Agent'
+        );
+
+        if (!confirmed) return;
+
+        Toast.info(`Deleting agent "${agentName}"...`);
+
+        try {
+            await this.apiCall(`/agents/${agentName}`, {
+                method: 'DELETE'
+            });
+            Toast.success(`Agent "${agentName}" deleted successfully!`);
+            setTimeout(() => this.loadAgents(), 1000);
+        } catch (error) {
+            console.error('Delete failed:', error);
+        }
+    },
+
+    // Prompt Assistant Functions
+    showPromptAssistant() {
+        document.getElementById('prompt-assistant-modal').classList.add('active');
+        this.showPromptAssistantForm();
+    },
+
+    showPromptAssistantForm() {
+        document.getElementById('prompt-assistant-input-view').style.display = 'block';
+        document.getElementById('prompt-assistant-result').style.display = 'none';
+    },
+
+    hidePromptAssistant() {
+        document.getElementById('prompt-assistant-modal').classList.remove('active');
+        document.getElementById('prompt-assistant-form').reset();
+        this.showPromptAssistantForm();
+    },
+
+    async generatePrompt() {
+        const purpose = document.getElementById('assistant-purpose').value.trim();
+        const expertise = document.getElementById('assistant-expertise').value.trim();
+        const inputFormat = document.getElementById('assistant-input').value.trim();
+        const outputFormat = document.getElementById('assistant-output').value.trim();
+
+        if (!purpose) {
+            Toast.error('Please describe what the agent should do');
+            return;
+        }
+
+        const inputView = document.getElementById('prompt-assistant-input-view');
+        const resultDiv = document.getElementById('prompt-assistant-result');
+        const outputPre = document.getElementById('prompt-assistant-output');
+
+        // Hide form and show result view with loading
+        inputView.style.display = 'none';
+        resultDiv.style.display = 'block';
+        outputPre.textContent = 'Generating prompt with AI... This may take 10-30 seconds...';
+
+        try {
+            const result = await this.apiCall('/agents/generate-prompt', {
+                method: 'POST',
+                body: JSON.stringify({
+                    agent_purpose: purpose,
+                    agent_expertise: expertise,
+                    input_format: inputFormat,
+                    output_format: outputFormat
+                })
+            });
+
+            outputPre.textContent = result.generated_prompt;
+            Toast.success('Prompt generated successfully!');
+
+            // Store the generated prompt for later use
+            this.generatedPrompt = result.generated_prompt;
+
+        } catch (error) {
+            outputPre.textContent = 'Failed to generate prompt. Please try again.';
+            console.error('Prompt generation failed:', error);
+        }
+    },
+
+    useGeneratedPrompt() {
+        if (this.generatedPrompt) {
+            document.getElementById('agent-prompt').value = this.generatedPrompt;
+            this.hidePromptAssistant();
+            Toast.success('Prompt inserted! You can edit it further if needed.');
+        }
+    },
+
+    async regeneratePrompt() {
+        const outputPre = document.getElementById('prompt-assistant-output');
+        outputPre.textContent = 'Regenerating prompt... This may take 10-30 seconds...';
+        await this.generatePrompt();
     },
 
     // Workflows
@@ -450,11 +797,55 @@ const app = {
     async viewWorkflow(workflowName) {
         try {
             const workflow = await this.apiCall(`/workflows/${workflowName}`);
-            Toast.info(`Workflow: ${workflow.name} (${workflow.steps.length} steps) - Check console for details`);
-            console.log('Workflow Details:', workflow);
+            const workflowHtml = this.formatWorkflowForDialog(workflow);
+            await Dialog.alert(workflowHtml, `Workflow: ${workflow.name}`);
         } catch (error) {
             // Error already shown
         }
+    },
+
+    formatWorkflowForDialog(workflow) {
+        const stepsHtml = workflow.steps.map((step, i) => {
+            return `
+                <div class="workflow-step-detail" style="margin: 10px 0; padding: 12px; background: var(--card-bg); border-radius: 4px; border-left: 3px solid var(--primary-color);">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="background: var(--primary-color); color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">${i + 1}</span>
+                        <strong style="font-size: 14px; color: var(--text-color);">${step.name || `Step ${i + 1}`}</strong>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">
+                        <strong>Agent:</strong> <span style="color: var(--primary-color); font-weight: 500;">${step.agent}</span>
+                    </div>
+                    ${step.input ? `
+                        <div style="margin-top: 8px;">
+                            <strong style="font-size: 12px; color: var(--text-muted);">Input:</strong>
+                            <div style="margin-top: 4px; padding: 8px; background: var(--bg-color); border-radius: 4px; font-size: 12px; color: var(--text-color); border: 1px solid var(--border-color);">
+                                ${step.input.length > 200 ? step.input.substring(0, 200) + '...' : step.input}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${step.context_from ? `
+                        <div style="margin-top: 4px; font-size: 12px; color: var(--text-muted);">
+                            <strong>Uses output from:</strong> ${step.context_from}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div style="max-width: 600px;">
+                <div class="workflow-info" style="margin-bottom: 16px; padding: 12px; border-radius: 4px; background: var(--card-bg); border-left: 4px solid var(--primary-color);">
+                    <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 4px;">
+                        <strong>Description:</strong> <span style="color: var(--text-color);">${workflow.description || 'No description'}</span>
+                    </div>
+                    <div style="font-size: 14px; color: var(--text-muted);">
+                        <strong>Version:</strong> ${workflow.version || 'N/A'} | <strong>Steps:</strong> ${workflow.steps.length}
+                    </div>
+                </div>
+                <h4 style="margin: 16px 0 12px 0; font-size: 15px; color: var(--text-color);">Workflow Steps:</h4>
+                ${stepsHtml}
+            </div>
+        `;
     },
 
     runWorkflow(workflowName) {
@@ -566,11 +957,8 @@ const app = {
             return;
         }
 
-        const resultDiv = document.getElementById('execution-result');
-        const resultContent = document.getElementById('execution-result-content');
-
-        resultDiv.style.display = 'block';
-        resultContent.innerHTML = '<div class="loading">Executing workflow...</div>';
+        // Show loading toast
+        Toast.info('Executing workflow...');
 
         try {
             const result = await this.apiCall('/workflows/execute', {
@@ -581,11 +969,124 @@ const app = {
                 })
             });
 
-            this.renderExecutionResult(result.result);
+            // Show results in dialog
+            const resultHtml = this.formatExecutionResultForDialog(result.result);
+            await Dialog.alert(resultHtml, `Workflow Result: ${workflowName}`);
+
             Toast.success('Workflow executed successfully!');
             this.loadExecutions();
         } catch (error) {
-            resultContent.innerHTML = '<div class="alert alert-error">Workflow execution failed</div>';
+            await Dialog.alert(
+                '<div class="alert alert-error">Workflow execution failed. Please check the logs.</div>',
+                'Execution Failed'
+            );
+        }
+    },
+
+    formatExecutionResultForDialog(execution) {
+        const statusIcon = execution.status === 'completed' ? '✓' : '✗';
+        const statusClass = execution.status === 'completed' ? 'success' : 'error';
+
+        // Clear previous step outputs
+        this.stepOutputs = {};
+
+        const stepsHTML = execution.step_results.map((step, i) => {
+            const stepIcon = step.success ? '✓' : '✗';
+            const stepClass = step.success ? 'success' : 'error';
+            const stepId = `step-output-${Date.now()}-${i}`;
+
+            // Truncate output if too long for display
+            let output = step.output || '';
+            const maxLength = 500;
+            let displayOutput = output;
+            let isTruncated = false;
+            if (output.length > maxLength) {
+                displayOutput = output.substring(0, maxLength) + '...';
+                isTruncated = true;
+            }
+
+            // Store full output in the stepOutputs object
+            this.stepOutputs[stepId] = output;
+
+            return `
+                <div class="workflow-step-result ${stepClass}" style="margin: 10px 0; padding: 12px; border-left: 3px solid var(${step.success ? '--success-color' : '--danger-color'}); background: var(--card-bg); border-radius: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="font-size: 18px; color: var(${step.success ? '--success-color' : '--danger-color'});">${stepIcon}</span>
+                        <strong style="font-size: 14px; color: var(--text-color);">${step.step_name || `Step ${i + 1}`}</strong>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">
+                        <strong>Agent:</strong> ${step.agent}
+                    </div>
+                    ${step.success ? `
+                        <details style="margin-top: 8px;">
+                            <summary style="cursor: pointer; color: var(--primary-color); font-weight: 500;">View Output ${isTruncated ? `(${output.length} chars)` : ''}</summary>
+                            <div style="position: relative; margin-top: 8px;">
+                                <button onclick="app.copyStepOutput('${stepId}')" class="btn btn-small" style="position: absolute; top: 8px; right: 8px; z-index: 1; font-size: 11px; padding: 4px 8px;">
+                                    📋 Copy Full Output
+                                </button>
+                                <pre id="${stepId}" style="margin: 0; padding: 10px; padding-top: 40px; background: var(--bg-color); border-radius: 4px; font-size: 12px; overflow-x: auto; max-height: 300px; overflow-y: auto; color: var(--text-color); border: 1px solid var(--border-color); white-space: pre-wrap; word-wrap: break-word;">${this.escapeHtml(displayOutput)}</pre>
+                                ${isTruncated ? `<small style="color: var(--text-muted); font-style: italic; margin-top: 4px; display: block;">Showing first ${maxLength} characters. Click "Copy Full Output" to get complete text.</small>` : ''}
+                            </div>
+                        </details>
+                    ` : `
+                        <div style="margin-top: 8px; padding: 10px; background: var(--bg-color); border-radius: 4px; border: 1px solid var(--danger-color);">
+                            <strong style="color: var(--danger-color);">Error:</strong> <span style="color: var(--text-color);">${step.error || 'Unknown error'}</span>
+                        </div>
+                    `}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div style="max-width: 600px;">
+                <div class="workflow-result-summary" style="margin-bottom: 16px; padding: 12px; border-radius: 4px; background: var(--card-bg); border-left: 4px solid var(${execution.status === 'completed' ? '--success-color' : '--danger-color'});">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="font-size: 20px; color: var(${execution.status === 'completed' ? '--success-color' : '--danger-color'});">${statusIcon}</span>
+                        <strong style="font-size: 16px; color: var(--text-color);">${execution.status === 'completed' ? 'Workflow Completed' : 'Workflow Failed'}</strong>
+                    </div>
+                    <div style="font-size: 14px; color: var(--text-muted);">
+                        <strong>Duration:</strong> ${execution.duration_seconds ? execution.duration_seconds.toFixed(2) + 's' : 'N/A'}
+                    </div>
+                </div>
+                <h4 style="margin: 16px 0 12px 0; font-size: 15px; color: var(--text-color);">Workflow Steps:</h4>
+                ${stepsHTML}
+            </div>
+        `;
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+
+    async copyStepOutput(stepId) {
+        // Get full output from stored outputs object
+        const fullOutput = this.stepOutputs[stepId];
+
+        if (!fullOutput) {
+            Toast.error('Output not found');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(fullOutput);
+            Toast.success('Output copied to clipboard!');
+        } catch (err) {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = fullOutput;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                Toast.success('Output copied to clipboard!');
+            } catch (err2) {
+                Toast.error('Failed to copy to clipboard');
+            }
+            document.body.removeChild(textArea);
         }
     },
 

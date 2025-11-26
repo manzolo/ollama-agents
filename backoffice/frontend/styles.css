@@ -434,11 +434,15 @@ header p {
 .modal-content {
     background: var(--card-bg);
     border-radius: 12px;
-    max-width: 800px;
+    max-width: 600px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
+}
+
+.modal-content-large {
+    max-width: 800px;
 }
 
 .modal-header {
@@ -475,6 +479,131 @@ header p {
 
 #agent-details-content {
     padding: 20px;
+}
+
+#prompt-assistant-input-view {
+    padding: 20px;
+}
+
+#prompt-assistant-input-view form {
+    padding: 0;
+}
+
+#prompt-assistant-result {
+    padding: 20px;
+}
+
+/* Form Sections */
+.form-section {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.form-section-highlight {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: none;
+    color: white;
+}
+
+.form-section-highlight label,
+.form-section-highlight small,
+.form-section-highlight .section-title {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.form-section-highlight textarea {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    color: #1e293b;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.form-section-highlight textarea:focus {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    outline: none;
+}
+
+.form-section-highlight textarea::placeholder {
+    color: rgba(30, 41, 59, 0.5);
+    font-style: italic;
+}
+
+.section-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Collapsible Section */
+.form-section-collapsible {
+    margin-bottom: 24px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.section-title-collapsible {
+    padding: 16px 20px;
+    background: var(--card-bg);
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+
+.section-title-collapsible:hover {
+    background: var(--bg-color);
+}
+
+.section-title-collapsible::marker {
+    content: '';
+}
+
+.section-title-collapsible::before {
+    content: '▶';
+    font-size: 0.8em;
+    transition: transform 0.2s;
+}
+
+.form-section-collapsible[open] .section-title-collapsible::before {
+    transform: rotate(90deg);
+}
+
+.form-section-content {
+    padding: 20px;
+    background: var(--bg-color);
 }
 
 /* Loading */
@@ -523,6 +652,32 @@ pre {
 
 code {
     font-family: 'Courier New', Courier, monospace;
+}
+
+/* Prompt Textarea - Enhanced styling */
+.prompt-textarea {
+    width: 100%;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    padding: 14px !important;
+    border-radius: 8px !important;
+    border: 2px solid var(--border-color) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s ease !important;
+}
+
+.prompt-textarea:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.1) !important;
+}
+
+.form-group small,
+.form-section small {
+    display: block;
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 0.85em;
 }
 
 /* Responsive */
@@ -700,8 +855,10 @@ code {
     background: var(--card-bg);
     border-radius: 12px;
     padding: 24px;
-    max-width: 400px;
+    max-width: 700px;
     width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -716,6 +873,7 @@ code {
     color: var(--text-muted);
     margin-bottom: 20px;
     line-height: 1.5;
+    overflow-wrap: break-word;
 }
 
 .confirm-dialog-actions {
