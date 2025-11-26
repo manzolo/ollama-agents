@@ -1,5 +1,11 @@
 # Ollama Agents - Modular AI Agent Architecture
 
+![Docker](https://img.shields.io/badge/docker-ready-2496ED?style=flat&logo=docker&logoColor=white)
+![GPU Support](https://img.shields.io/badge/GPU-NVIDIA-76B900?style=flat&logo=nvidia&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.11-3776AB?style=flat&logo=python&logoColor=white)
+![Version](https://img.shields.io/badge/version-2.0.0-blue?style=flat)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat)
+
 A clean, modular, and extensible Docker Compose architecture for hosting multiple specialized AI agents powered by Ollama, with a powerful **Backoffice Web UI** for managing multi-agent workflows.
 
 ## Overview
@@ -46,6 +52,7 @@ This project provides a modular framework for deploying multiple specialized AI 
 ### Prerequisites
 
 - Docker and Docker Compose
+- Make and jq (for Makefile commands)
 - At least 8GB RAM (16GB+ recommended)
 - (Optional) NVIDIA GPU with Docker GPU support
 
@@ -84,12 +91,12 @@ make test-agent agent=swarm-converter
 make run agent=swarm-converter file=docker-compose.yml
 ```
 
-For detailed instructions, see **[Quick Start Guide](docs/QUICK_START.md)**.
+For detailed instructions, see **[Quick Start Guide](docs/QUICKSTART.md)**.
 
 ## Documentation
 
 ### Core Documentation
-- **[Quick Start Guide](docs/QUICK_START.md)** - Get up and running in minutes
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in minutes
 - **[Agent Documentation](docs/AGENTS.md)** - Create and configure agents
 - **[Plugin System](docs/PLUGINS.md)** - Plugin architecture and development
 - **[Workflow Guide](docs/WORKFLOWS.md)** - Multi-agent workflow orchestration
@@ -106,45 +113,31 @@ For detailed instructions, see **[Quick Start Guide](docs/QUICK_START.md)**.
 ```
 ollama-agents/
 ├── docs/                       # Documentation
-│   ├── QUICK_START.md
-│   ├── AGENTS.md
-│   ├── WORKFLOWS.md
-│   ├── API_REFERENCE.md
-│   └── TROUBLESHOOTING.md
-│
 ├── agents/                     # Agent definitions
 │   ├── base/                   # Base agent implementation
 │   ├── swarm-converter/        # Docker Compose to Swarm converter
 │   ├── swarm-validator/        # Swarm stack validator
 │   └── .agent-template/        # Template for new agents
-│
 ├── backoffice/                 # Workflow management system
 │   ├── backend/                # FastAPI server
 │   ├── frontend/               # Web UI
 │   └── workflows/              # Workflow definitions (YAML)
-│
-├── docker-compose.agents/      # Runtime agent deployments
-├── shared/context/             # Persistent context storage
 ├── docker-compose.yml          # Main orchestration
 ├── Makefile                    # Convenient commands
 └── .env                        # Environment configuration
 ```
 
-## Base Agents
+## Key Features
 
-### Swarm Converter
-Converts Docker Compose files to Docker Swarm stack files.
-- **Endpoint**: http://localhost:7001
-- **Swagger**: http://localhost:7001/docs
+- 🤖 **Multiple Specialized Agents** - Each with its own model and configuration
+- 🎨 **Backoffice Web UI** - Visual workflow management and execution
+- 🔄 **YAML-Based Workflows** - Chain agents without coding
+- 📊 **Execution History** - Track all workflow runs
+- 🔌 **REST API** - Full programmatic access
+- 🐳 **Docker Compose** - Easy deployment and scaling
+- 🎯 **GPU Support** - Optional NVIDIA GPU acceleration
 
-### Swarm Validator
-Validates Docker Swarm stack files for correctness and best practices.
-- **Endpoint**: http://localhost:7002
-- **Swagger**: http://localhost:7002/docs
-
-## Makefile Commands
-
-### Basic Operations
+## Common Commands
 
 ```bash
 # Start/Stop
@@ -152,59 +145,18 @@ make up              # Start all services
 make down            # Stop all services
 make restart         # Restart all services
 
-# With GPU support
-make up-gpu          # Start with GPU
-make init-gpu        # Initialize with GPU
-```
-
-### Monitoring
-
-```bash
+# Monitoring
 make status          # Show service status
 make health          # Check agent health
 make logs            # Show all logs
-make logs agent=X    # Show specific agent logs
-```
 
-### Agent Operations
-
-```bash
+# Agent Operations
 make test-agent agent=swarm-converter       # Test agent
 make run agent=X file=input.yml             # Run agent with file
-make agent-info agent=X                     # Get agent info
 make docs agent=X                           # Open Swagger UI
 ```
 
-### Development
-
-```bash
-make rebuild         # Full rebuild
-make clean           # Remove containers and volumes
-make prune           # Prune unused Docker resources
-```
-
-For all commands, see the [Makefile](Makefile).
-
-## CI/CD
-
-The project includes automated testing via GitHub Actions:
-
-- ✅ Builds all Docker services
-- ✅ Tests health endpoints
-- ✅ Validates API responses
-- ✅ Checks OpenAPI schema
-
-See `.github/workflows/test.yml` for details.
-
-## Contributing
-
-To contribute:
-1. Create new agents following the template
-2. Document your agent's capabilities
-3. Include example usage
-4. Test thoroughly before deployment
-
-See **[Agent Documentation](docs/AGENTS.md)** for details.
+For all commands, see the [Makefile](Makefile) or run `make help`.
 
 ## License
 

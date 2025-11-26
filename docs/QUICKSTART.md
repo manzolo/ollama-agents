@@ -1,5 +1,11 @@
 # Quick Start Guide
 
+## Prerequisites
+
+- Docker and Docker Compose
+- Make and jq
+- 8GB+ RAM
+
 ## 🚀 Fastest Way: Use the Wizard
 
 ```bash

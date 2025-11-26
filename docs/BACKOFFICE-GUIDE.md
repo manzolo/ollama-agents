@@ -9,10 +9,14 @@ I've created a **Dynamic Workflow Orchestrator** - a complete web-based backoffi
 ### 1. **Web UI** (http://localhost:8080)
 A modern, responsive interface with 4 main sections:
 
+> **📸 Screenshot Placeholder**: Main Backoffice UI showing all 4 tabs (Agents, Workflows, Execute, History)
+
 - **Agents Tab**: Discover and test all available agents
   - Real-time health monitoring
   - Agent capabilities display
   - Quick test functionality
+
+> **📸 Screenshot Placeholder**: Agents tab showing agent list with health status and capabilities
 
 - **Workflows Tab**: Manage workflow definitions
   - Create new workflows via UI
@@ -20,17 +24,23 @@ A modern, responsive interface with 4 main sections:
   - Delete workflows
   - Run workflows directly
 
+> **📸 Screenshot Placeholder**: Workflows tab showing available workflows and management options
+
 - **Execute Tab**: Run workflows with custom input
   - Select workflow from dropdown
   - Enter input data
   - View real-time execution results
   - See step-by-step progress
 
+> **📸 Screenshot Placeholder**: Execute tab showing workflow execution in progress with real-time results
+
 - **History Tab**: Review past executions
   - Execution status and duration
   - Step-by-step breakdown
   - Error details
   - Expandable results view
+
+> **📸 Screenshot Placeholder**: History tab showing past workflow executions with status and details
 
 ### 2. **REST API** (http://localhost:8080/api)
 Complete API for programmatic access:
