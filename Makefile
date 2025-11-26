@@ -35,8 +35,8 @@ remove-network:
 # -----------------------------
 # Dynamic Agent Compose Files
 # -----------------------------
-# Include both example agents and runtime agents
-EXAMPLE_COMPOSE_FILES := $(wildcard docker-compose.agents/*.yml)
+# Include both example agents (git-tracked) and runtime agents (gitignored)
+EXAMPLE_COMPOSE_FILES := $(wildcard examples/compose/*.yml)
 RUNTIME_COMPOSE_FILES := $(wildcard runtime/compose/*.yml)
 AGENT_COMPOSE_FILES   := $(EXAMPLE_COMPOSE_FILES) $(RUNTIME_COMPOSE_FILES)
 COMPOSE_FILES         := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))

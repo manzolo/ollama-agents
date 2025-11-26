@@ -58,15 +58,9 @@ TODO.txt
 # Runtime - User-created agents (completely gitignored)
 runtime/
 
-# Legacy folders - Keep for backwards compatibility but ignore new content
+# Legacy folders - Deprecated, moved to examples/
 agents/swarm-converter/
 agents/swarm-validator/
 agents/*
 !agents/base/
 !agents/.agent-template/
-
-backoffice/agent-definitions/*
-!backoffice/agent-definitions/README.md
-
-docker-compose.agents/*
-!docker-compose.agents/README.md
