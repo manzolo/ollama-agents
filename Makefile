@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network
+.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network update-version
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -344,3 +344,12 @@ clean: ## Remove ALL containers, volumes, networks and data
 	else \
 		echo "$(BLUE)Cleanup cancelled$(NC)"; \
 	fi
+
+# ============================================================================
+# Development Utilities
+# ============================================================================
+update-version: ## Update frontend version to current git hash (cache busting)
+	@echo "$(BLUE)Updating frontend version...$(NC)"
+	@chmod +x backoffice/update-version.sh
+	@./backoffice/update-version.sh
+	@echo "$(GREEN)Version updated! Restart backoffice to apply: make restart$(NC)"
