@@ -1,0 +1,87 @@
+# ============================================================================
+# PLUGIN MANIFEST - [AGENT_NAME]
+# ============================================================================
+# This manifest describes the plugin's capabilities, requirements, and metadata
+# for automatic discovery and registration in the Ollama Agents system.
+# ============================================================================
+
+plugin:
+  # Unique identifier (must match agent name - lowercase, hyphenated)
+  id: [agent-name]
+
+  # Human-readable information
+  name: "[Agent Display Name]"
+  description: "[Brief description of what this agent does]"
+  version: 1.0.0
+  author: "[Your Name or Organization]"
+
+  # Optional metadata
+  homepage: https://github.com/yourorg/your-plugin
+  license: MIT
+  tags:
+    - [tag1]
+    - [tag2]
+    - [tag3]
+
+  # Plugin icon (optional, for UI - use emoji or path to icon file)
+  icon: 🤖
+
+# Agent runtime configuration
+agent:
+  # Network port (must be unique, recommended: 7000-7999)
+  port: 7000
+
+  # Model configuration
+  model: llama3.2
+  temperature: 0.7
+  max_tokens: 4096
+
+  # Resource requirements (optional)
+  resources:
+    memory: "512M"
+    cpu: "1.0"
+
+# Capabilities - what this agent can do
+capabilities:
+  - [capability-1]
+  - [capability-2]
+  - [capability-3]
+
+# API Contract - how to interact with this plugin
+api:
+  # Base endpoint for processing requests
+  endpoint: /process
+
+  # Input/output types
+  input:
+    type: text
+    format: [text|json|yaml|markdown]
+    description: "[What input does this agent expect?]"
+
+  output:
+    type: text
+    format: [text|json|yaml|markdown]
+    description: "[What output does this agent produce?]"
+
+  # Example usage
+  examples:
+    - name: "Basic usage"
+      description: "[Describe what this example does]"
+      input: |
+        [Example input here]
+
+# Dependencies
+requires:
+  # Minimum Ollama version
+  ollama: ">=0.1.0"
+
+  # Required models (will be pulled if not available)
+  models:
+    - llama3.2
+
+# Health check configuration
+health:
+  endpoint: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3

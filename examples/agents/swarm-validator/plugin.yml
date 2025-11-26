@@ -1,0 +1,96 @@
+# ============================================================================
+# PLUGIN MANIFEST - Swarm Validator
+# ============================================================================
+# This manifest describes the plugin's capabilities, requirements, and metadata
+# for automatic discovery and registration in the Ollama Agents system.
+# ============================================================================
+
+plugin:
+  # Unique identifier (must match agent name)
+  id: swarm-validator
+
+  # Human-readable information
+  name: "Docker Swarm Validator"
+  description: "Validates Docker Swarm stack files for correctness, security, and best practices"
+  version: 1.0.0
+  author: "Ollama Agents Team"
+
+  # Optional metadata
+  homepage: https://github.com/yourorg/ollama-agents
+  license: MIT
+  tags:
+    - docker
+    - swarm
+    - validator
+    - security
+    - devops
+
+  # Plugin icon (optional, for UI)
+  icon: ✅
+
+# Agent runtime configuration
+agent:
+  # Network port (must be unique)
+  port: 7002
+
+  # Model configuration
+  model: llama3.2
+  temperature: 0.1
+  max_tokens: 4096
+
+  # Resource requirements (optional)
+  resources:
+    memory: "512M"
+    cpu: "1.0"
+
+# Capabilities - what this agent can do
+capabilities:
+  - yaml-validation
+  - swarm-stack-validation
+  - security-analysis
+  - best-practices-checking
+  - configuration-linting
+
+# API Contract - how to interact with this plugin
+api:
+  # Base endpoint for processing requests
+  endpoint: /process
+
+  # Input/output types
+  input:
+    type: text
+    format: yaml
+    description: "Docker Swarm stack YAML file content"
+
+  output:
+    type: text
+    format: json
+    description: "Validation report with errors, warnings, and recommendations"
+
+  # Example usage
+  examples:
+    - name: "Basic validation"
+      description: "Validate a swarm stack file"
+      input: |
+        version: '3.8'
+        services:
+          web:
+            image: nginx:latest
+            deploy:
+              replicas: 3
+
+# Dependencies
+requires:
+  # Minimum Ollama version
+  ollama: ">=0.1.0"
+
+  # Required models (will be pulled if not available)
+  models:
+    - llama3.2
+
+# Health check configuration
+health:
+  endpoint: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3

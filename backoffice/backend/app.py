@@ -23,6 +23,7 @@ import httpx
 from orchestrator import WorkflowOrchestrator, WorkflowManager, Workflow
 from agent_manager import AgentManager, AgentDefinition
 from deployment_manager import DeploymentManager
+from plugin_manager import PluginRegistry, PluginValidator, PluginManifest
 
 
 # ============================================================================
@@ -35,11 +36,8 @@ COMPOSE_DIR = Path(os.getenv("COMPOSE_DIR", "/app/runtime/compose"))
 EXAMPLES_DIR = Path(os.getenv("EXAMPLES_DIR", "/app/examples"))
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "/project"))
 
-# Agent Registry - Maps agent names to their internal URLs
-AGENT_REGISTRY = {
-    "swarm-converter": os.getenv("SWARM_CONVERTER_URL", "http://agent-swarm-converter:8000"),
-    "swarm-validator": os.getenv("SWARM_VALIDATOR_URL", "http://agent-swarm-validator:8000"),
-}
+# Initialize Plugin Registry (replaces static AGENT_REGISTRY)
+plugin_registry = PluginRegistry(PROJECT_ROOT)
 
 
 # ============================================================================
@@ -145,9 +143,11 @@ app.add_middleware(
 
 # Initialize components
 workflow_manager = WorkflowManager(WORKFLOWS_DIR)
-orchestrator = WorkflowOrchestrator(AGENT_REGISTRY)
 agent_manager = AgentManager(AGENT_DEFINITIONS_DIR)
 deployment_manager = DeploymentManager(PROJECT_ROOT)
+
+# Orchestrator will be initialized after plugin discovery
+orchestrator = None
 
 # Store for workflow executions (in-memory for now)
 executions = {}
@@ -173,7 +173,7 @@ async def health_check():
         "service": "backoffice",
         "timestamp": datetime.now().isoformat(),
         "workflows_dir": str(WORKFLOWS_DIR),
-        "registered_agents": len(AGENT_REGISTRY)
+        "registered_agents": len(plugin_registry.list_all())
     }
 
 
@@ -306,14 +306,20 @@ async def list_agent_definitions():
 @app.get("/api/agents/{agent_name}", tags=["agents"], summary="Get agent details")
 async def get_agent_details(agent_name: str):
     """Get detailed information about a specific agent"""
-    if agent_name not in AGENT_REGISTRY:
-        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+    plugin = plugin_registry.get(agent_name)
+    if not plugin:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found in registry")
 
     agents = await orchestrator.discover_agents()
     if agent_name not in agents:
         raise HTTPException(status_code=503, detail=f"Agent '{agent_name}' is unavailable")
 
-    return agents[agent_name]
+    # Merge plugin manifest with runtime info
+    agent_info = agents[agent_name]
+    if plugin.get("manifest"):
+        agent_info["plugin"] = plugin["manifest"]
+
+    return agent_info
 
 
 @app.post("/api/agents/test", tags=["agents"], summary="Test an agent")
@@ -624,14 +630,13 @@ async def delete_agent_completely(agent_name: str, remove_files: bool = True):
     agent_manager.delete_agent_definition(agent_name)
 
     # Remove from orchestrator registry
-    if agent_name in orchestrator.agent_registry:
+    if orchestrator and agent_name in orchestrator.agent_registry:
         del orchestrator.agent_registry[agent_name]
         print(f"Removed {agent_name} from orchestrator registry")
 
-    # Remove from static AGENT_REGISTRY if present
-    if agent_name in AGENT_REGISTRY:
-        del AGENT_REGISTRY[agent_name]
-        print(f"Removed {agent_name} from static registry")
+    # Unregister from plugin registry
+    plugin_registry.unregister(agent_name)
+    print(f"Unregistered plugin: {agent_name}")
 
     if result["status"] == "failed":
         raise HTTPException(
@@ -644,6 +649,110 @@ async def delete_agent_completely(agent_name: str, remove_files: bool = True):
         "message": f"Agent '{agent_name}' deleted successfully",
         "details": result
     }
+
+
+# ============================================================================
+# Plugin Endpoints
+# ============================================================================
+
+@app.get("/api/plugins", tags=["plugins"], summary="List all registered plugins")
+async def list_plugins():
+    """
+    List all registered plugins with their manifests.
+
+    Returns detailed information about all discovered plugins including
+    metadata, capabilities, and API contracts.
+    """
+    plugins = plugin_registry.list_all()
+
+    return {
+        "count": len(plugins),
+        "plugins": [
+            {
+                "id": plugin_id,
+                "url": data["url"],
+                "status": data.get("status", "unknown"),
+                "registered_at": data.get("registered_at"),
+                **data.get("manifest", {})
+            }
+            for plugin_id, data in plugins.items()
+        ]
+    }
+
+
+@app.get("/api/plugins/{plugin_id}", tags=["plugins"], summary="Get plugin details")
+async def get_plugin(plugin_id: str):
+    """Get detailed information about a specific plugin"""
+    plugin = plugin_registry.get(plugin_id)
+
+    if not plugin:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' not found")
+
+    return plugin
+
+
+@app.post("/api/plugins/discover", tags=["plugins"], summary="Re-discover plugins")
+async def rediscover_plugins():
+    """
+    Trigger plugin re-discovery.
+
+    Scans filesystem and Docker for new or updated plugins.
+    """
+    global orchestrator
+
+    # Re-discover plugins
+    plugin_count = plugin_registry.discover_all()
+
+    # Reinitialize orchestrator with updated registry
+    agent_registry_legacy = plugin_registry.to_legacy_registry()
+    orchestrator = WorkflowOrchestrator(agent_registry_legacy)
+
+    return {
+        "status": "success",
+        "plugins_discovered": plugin_count,
+        "plugins": list(plugin_registry.list_all().keys())
+    }
+
+
+@app.post("/api/plugins/{plugin_id}/validate", tags=["plugins"], summary="Validate plugin manifest")
+async def validate_plugin_manifest(plugin_id: str):
+    """
+    Validate a plugin's manifest file.
+
+    Checks if the plugin.yml file is valid and conforms to the schema.
+    """
+    # Find plugin manifest file
+    plugin_paths = [
+        PROJECT_ROOT / "examples" / "agents" / plugin_id / "plugin.yml",
+        PROJECT_ROOT / "runtime" / "agents" / plugin_id / "plugin.yml",
+    ]
+
+    plugin_yml = None
+    for path in plugin_paths:
+        if path.exists():
+            plugin_yml = path
+            break
+
+    if not plugin_yml:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plugin manifest not found for '{plugin_id}'"
+        )
+
+    is_valid, errors, manifest = PluginValidator.validate_file(plugin_yml)
+
+    if is_valid:
+        return {
+            "status": "valid",
+            "plugin_id": plugin_id,
+            "manifest": manifest.to_dict()
+        }
+    else:
+        return {
+            "status": "invalid",
+            "plugin_id": plugin_id,
+            "errors": errors
+        }
 
 
 # ============================================================================
@@ -817,17 +926,36 @@ async def global_exception_handler(request, exc):
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
+    global orchestrator
+
     print(f"Starting Backoffice API...")
     print(f"Workflows directory: {WORKFLOWS_DIR}")
     print(f"Agent definitions directory: {AGENT_DEFINITIONS_DIR}")
     print(f"Compose directory: {COMPOSE_DIR}")
     print(f"Examples directory: {EXAMPLES_DIR}")
-    print(f"Registered agents: {list(AGENT_REGISTRY.keys())}")
 
     # Ensure directories exist
     WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
     AGENT_DEFINITIONS_DIR.mkdir(parents=True, exist_ok=True)
     COMPOSE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Discover plugins
+    print(f"\n🔌 Discovering plugins...")
+    plugin_count = plugin_registry.discover_all()
+    print(f"✓ Discovered {plugin_count} plugins")
+
+    # List discovered plugins
+    for plugin_id, plugin_data in plugin_registry.list_all().items():
+        manifest = plugin_data.get("manifest")
+        if manifest:
+            print(f"  • {plugin_id} - {manifest.get('name', plugin_id)} v{manifest.get('version', '1.0.0')}")
+        else:
+            print(f"  • {plugin_id} (no manifest)")
+
+    # Initialize orchestrator with discovered plugins
+    agent_registry_legacy = plugin_registry.to_legacy_registry()
+    orchestrator = WorkflowOrchestrator(agent_registry_legacy)
+    print(f"✓ Orchestrator initialized with {len(agent_registry_legacy)} agents\n")
 
 
 @app.on_event("shutdown")

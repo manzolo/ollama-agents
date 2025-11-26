@@ -1,0 +1,95 @@
+# ============================================================================
+# PLUGIN MANIFEST - Swarm Converter
+# ============================================================================
+# This manifest describes the plugin's capabilities, requirements, and metadata
+# for automatic discovery and registration in the Ollama Agents system.
+# ============================================================================
+
+plugin:
+  # Unique identifier (must match agent name)
+  id: swarm-converter
+
+  # Human-readable information
+  name: "Docker Swarm Converter"
+  description: "Converts Docker Compose files to Docker Swarm stack files with best practices"
+  version: 1.0.0
+  author: "Ollama Agents Team"
+
+  # Optional metadata
+  homepage: https://github.com/yourorg/ollama-agents
+  license: MIT
+  tags:
+    - docker
+    - swarm
+    - converter
+    - devops
+
+  # Plugin icon (optional, for UI)
+  icon: 🐳
+
+# Agent runtime configuration
+agent:
+  # Network port (must be unique)
+  port: 7001
+
+  # Model configuration
+  model: llama3.2
+  temperature: 0.3
+  max_tokens: 8192
+
+  # Resource requirements (optional)
+  resources:
+    memory: "512M"
+    cpu: "1.0"
+
+# Capabilities - what this agent can do
+capabilities:
+  - docker-compose-parsing
+  - docker-swarm-conversion
+  - yaml-validation
+  - deployment-recommendations
+  - best-practices-enforcement
+
+# API Contract - how to interact with this plugin
+api:
+  # Base endpoint for processing requests
+  endpoint: /process
+
+  # Input/output types
+  input:
+    type: text
+    format: yaml
+    description: "Docker Compose YAML file content"
+
+  output:
+    type: text
+    format: yaml
+    description: "Docker Swarm stack YAML file"
+
+  # Example usage
+  examples:
+    - name: "Basic conversion"
+      description: "Convert a simple compose file"
+      input: |
+        version: '3.8'
+        services:
+          web:
+            image: nginx:latest
+            ports:
+              - "80:80"
+
+# Dependencies
+requires:
+  # Minimum Ollama version
+  ollama: ">=0.1.0"
+
+  # Required models (will be pulled if not available)
+  models:
+    - llama3.2
+
+# Health check configuration
+health:
+  endpoint: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3

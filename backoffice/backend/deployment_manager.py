@@ -244,6 +244,56 @@ networks:
             with open(agent_dir / "prompt.txt", "w") as f:
                 f.write(agent_definition["system_prompt"])
 
+            # Create plugin.yml
+            plugin_data = {
+                "plugin": {
+                    "id": agent_name,
+                    "name": agent_definition["agent"]["description"],
+                    "description": agent_definition["agent"]["description"],
+                    "version": agent_definition["agent"].get("version", "1.0.0"),
+                    "author": "User",
+                    "tags": agent_definition.get("capabilities", [])[:3],
+                    "icon": "🔌"
+                },
+                "agent": {
+                    "port": agent_definition["deployment"]["port"],
+                    "model": agent_definition["deployment"]["model"],
+                    "temperature": agent_definition["deployment"]["temperature"],
+                    "max_tokens": agent_definition["deployment"]["max_tokens"],
+                    "resources": {
+                        "memory": "512M",
+                        "cpu": "1.0"
+                    }
+                },
+                "capabilities": agent_definition.get("capabilities", []),
+                "api": {
+                    "endpoint": "/process",
+                    "input": {
+                        "type": "text",
+                        "format": "text",
+                        "description": "Input text to process"
+                    },
+                    "output": {
+                        "type": "text",
+                        "format": "text",
+                        "description": "Processed output"
+                    }
+                },
+                "requires": {
+                    "ollama": ">=0.1.0",
+                    "models": [agent_definition["deployment"]["model"]]
+                },
+                "health": {
+                    "endpoint": "/health",
+                    "interval": "30s",
+                    "timeout": "10s",
+                    "retries": 3
+                }
+            }
+
+            with open(agent_dir / "plugin.yml", "w") as f:
+                yaml.dump(plugin_data, f, default_flow_style=False, sort_keys=False)
+
             return True
 
         except Exception as e:
