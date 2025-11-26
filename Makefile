@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network update-version
+.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent run run-raw shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network update-version
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -66,6 +66,8 @@ help: ## Show this help message
 	@echo "$(YELLOW)AGENT OPERATIONS$(NC)"
 	@echo " $(GREEN)list-agents$(NC)                   List all agents"
 	@echo " $(GREEN)test-agent agent=X$(NC)            Test agent health & info"
+	@echo " $(GREEN)run agent=X file=Y$(NC)            Run agent with file (JSON output)"
+	@echo " $(GREEN)run-raw agent=X file=Y$(NC)        Run agent with file (raw output)"
 	@echo " $(GREEN)logs [agent=X] [follow=true]$(NC)  View logs"
 	@echo " $(GREEN)logs-ollama$(NC)                   View Ollama logs"
 	@echo " $(GREEN)logs-backoffice$(NC)               View Backoffice logs"
@@ -290,11 +292,55 @@ endif
 		echo "$(RED)Error: Agent not running or port not found$(NC)"; \
 		exit 1; \
 	fi; \
-	echo "$(YELLOW)Checking health...$(NC)"; \
+	@echo "$(YELLOW)Checking health...$(NC)"
 	curl -s http://localhost:$$port/health | jq . || echo "$(RED)Health check failed$(NC)"; \
 	echo ""; \
 	echo "$(YELLOW)Agent info:$(NC)"; \
 	curl -s http://localhost:$$port/ | jq . || echo "$(RED)Info request failed$(NC)"
+
+run: ## Run agent with input file (usage: make run agent=NAME file=input.yml)
+ifndef agent
+	@echo "$(RED)Error: agent parameter required$(NC)"
+	@echo "Usage: make run agent=swarm-converter file=docker-compose.yml"
+	@exit 1
+endif
+ifndef file
+	@echo "$(RED)Error: file parameter required$(NC)"
+	@echo "Usage: make run agent=swarm-converter file=docker-compose.yml"
+	@exit 1
+endif
+	@echo "$(BLUE)Running agent $(agent) with file $(file)...$(NC)"
+	@port=$$(docker port agent-$(agent) 8000 2>/dev/null | cut -d: -f2); \
+	if [ -z "$$port" ]; then \
+		echo "$(RED)Error: Agent not running or port not found$(NC)"; \
+		exit 1; \
+	fi; \
+	jq -n --arg input "$$(cat $(file))" '{input: $$input}' | \
+	curl -s -X POST http://localhost:$$port/process \
+		-H "Content-Type: application/json" \
+		-d @- | jq .
+
+run-raw: ## Run agent with input file and get raw output (usage: make run-raw agent=NAME file=input.yml)
+ifndef agent
+	@echo "$(RED)Error: agent parameter required$(NC)"
+	@echo "Usage: make run-raw agent=swarm-converter file=docker-compose.yml"
+	@exit 1
+endif
+ifndef file
+	@echo "$(RED)Error: file parameter required$(NC)"
+	@echo "Usage: make run-raw agent=swarm-converter file=docker-compose.yml"
+	@exit 1
+endif
+	@port=$$(docker port agent-$(agent) 8000 2>/dev/null | cut -d: -f2); \
+	if [ -z "$$port" ]; then \
+		echo "$(RED)Error: Agent not running or port not found$(NC)" >&2; \
+		exit 1; \
+	fi; \
+	jq -n --arg input "$$(cat $(file))" '{input: $$input}' | \
+	curl -s -X POST http://localhost:$$port/process/raw/text \
+		-H "Content-Type: application/json" \
+		-d @-
+
 
 shell-agent: ## Enter agent container (usage: make shell-agent agent=NAME)
 ifndef agent
