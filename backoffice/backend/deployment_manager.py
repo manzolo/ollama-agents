@@ -30,9 +30,33 @@ class DeploymentManager:
         # Separate env files: base (git-tracked) and agents (git-ignored)
         self.env_path = self.project_root / ".env"
         self.env_agents_path = self.project_root / ".env.agents"
-        # Ensure .env.agents exists
+        # Ensure .env.agents exists with proper header
         if not self.env_agents_path.exists():
-            self.env_agents_path.write_text("# Auto-managed agent configurations\n\n")
+            header = """# ============================================================================
+# DYNAMIC AGENT CONFIGURATIONS
+# ============================================================================
+# ⚠️  AUTO-MANAGED FILE - DO NOT EDIT MANUALLY
+#
+# This file is automatically managed by the backoffice when you:
+# - Create a new agent → variables added
+# - Delete an agent → variables removed
+#
+# This file is gitignored to keep dynamic runtime configs separate from
+# the git-tracked .env file.
+# ============================================================================
+#
+# Format for each agent:
+# AGENT_NAME_PORT=7XXX
+# AGENT_NAME_MODEL=llama3.2
+# AGENT_NAME_TEMPERATURE=0.7
+# AGENT_NAME_MAX_TOKENS=4096
+# ============================================================================
+
+# Agent configurations will appear below (auto-generated)
+# ----------------------------------------------------------------------------
+
+"""
+            self.env_agents_path.write_text(header)
         # Runtime agents directory (user-created, git-ignored)
         self.agents_dir = self.project_root / "runtime" / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)

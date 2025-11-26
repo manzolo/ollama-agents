@@ -68,21 +68,18 @@ services:
       # - ./backoffice/frontend:/app/frontend:ro
       # Load environment variables from multiple files
       # .env is loaded automatically by docker-compose
-      # .env.agents contains dynamic agent configurations
+      # .env.agents contains dynamic agent configurations (auto-managed)
     env_file:
       - .env.agents
     networks:
       - agent-network
     environment:
-      - WORKFLOWS_DIR=${WORKFLOWS_DIR}
-      - FRONTEND_DIR=${FRONTEND_DIR}
-      - AGENT_DEFINITIONS_DIR=${AGENT_DEFINITIONS_DIR}
-      - COMPOSE_DIR=${COMPOSE_DIR}
-      - EXAMPLES_DIR=${EXAMPLES_DIR}
-      - PROJECT_ROOT=${PROJECT_ROOT}
+      # Host filesystem path (required for deployment manager)
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-$PWD}
+      # Agent URLs (for workflow orchestration)
       - SWARM_CONVERTER_URL=${SWARM_CONVERTER_URL}
       - SWARM_VALIDATOR_URL=${SWARM_VALIDATOR_URL}
+      # Ollama connection
       - OLLAMA_HOST=http://ollama:11434
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
