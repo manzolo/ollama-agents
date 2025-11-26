@@ -283,4 +283,4 @@ docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 - CI/CD automatically uses CPU mode
 - Local development can use either mode
 
-For questions or issues, check the [README.md](README.md) or open an issue.
+For questions or issues, check the [README.md](../README.md) or open an issue.
