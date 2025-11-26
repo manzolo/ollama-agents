@@ -18,7 +18,7 @@ NC     := \033[0m   # No Color
 # -----------------------------
 # Docker Network
 # -----------------------------
-NETWORK_NAME := ollama-agents-network
+NETWORK_NAME := ollama-agent-network
 
 create-network:
 	@docker network inspect $(NETWORK_NAME) >/dev/null 2>&1 || \
