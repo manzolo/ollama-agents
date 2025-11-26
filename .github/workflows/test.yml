@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      COMPOSE_FILE: docker-compose.yml:docker-compose.agents/swarm-converter.yml:docker-compose.agents/swarm-validator.yml
+      COMPOSE_FILE: docker-compose.yml:examples/compose/swarm-converter.yml:examples/compose/swarm-validator.yml
+      HOST_PROJECT_ROOT: ${{ github.workspace }}
 
     steps:
       - name: Checkout code
@@ -30,7 +31,8 @@ jobs:
           mkdir -p shared/context/swarm-converter
           mkdir -p shared/context/swarm-validator
           mkdir -p backoffice/workflows
-          touch .env.agents
+          mkdir -p runtime/agents
+          mkdir -p runtime/compose
           docker network create ollama-agent-network
 
       - name: Build services
