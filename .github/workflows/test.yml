@@ -220,7 +220,7 @@ jobs:
           {
             "name": "ci-test-agent",
             "description": "Agent created by CI",
-            "port": 7002,
+            "port": 7005,
             "model": "llama3.2",
             "temperature": 0.7,
             "max_tokens": 1000,
@@ -251,6 +251,47 @@ jobs:
              exit 1
           fi
           echo "✓ Agent creation passed"
+
+      - name: Test - Deploy Agent
+        run: |
+          echo "Testing agent deployment..."
+          
+          response=$(curl -s -X POST http://localhost:8080/api/agents/ci-test-agent/deploy)
+          echo "$response" | jq .
+          
+          # Verify deployment success
+          status=$(echo "$response" | jq -r '.status')
+          if [ "$status" != "success" ]; then
+            echo "Agent deployment failed"
+            exit 1
+          fi
+
+          # Wait for agent to be healthy
+          echo "Waiting for deployed agent to be healthy..."
+          max_attempts=20
+          attempt=0
+          until curl -f -s http://localhost:7005/health > /dev/null 2>&1; do
+            attempt=$((attempt + 1))
+            if [ $attempt -ge $max_attempts ]; then
+              echo "Deployed agent failed to become healthy"
+              docker compose logs agent-ci-test-agent
+              exit 1
+            fi
+            echo "Waiting for agent... ($attempt/$max_attempts)"
+            sleep 5
+          done
+          echo "Deployed agent is healthy!"
+
+          # Verify agent appears in running agents list
+          echo "Verifying agent in running list..."
+          list_response=$(curl -s http://localhost:8080/api/agents)
+          if ! echo "$list_response" | jq -e '.agents["ci-test-agent"]' > /dev/null; then
+             echo "Deployed agent not found in running list"
+             echo "List response:"
+             echo "$list_response" | jq .
+             exit 1
+          fi
+          echo "✓ Agent deployment passed"
 
       - name: Test - Delete Agent
         run: |
