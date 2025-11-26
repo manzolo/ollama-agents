@@ -98,7 +98,7 @@
 
     <!-- Modal for Create Workflow -->
     <div id="create-workflow-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content modal-content-large">
             <div class="modal-header">
                 <h2>Create New Workflow</h2>
                 <button onclick="app.hideCreateWorkflow()" class="btn-close">&times;</button>
@@ -112,16 +112,29 @@
                     <label for="workflow-description">Description</label>
                     <input type="text" id="workflow-description">
                 </div>
-                <div class="form-group">
-                    <label for="workflow-config">Workflow Configuration (YAML)</label>
-                    <textarea id="workflow-config" rows="15" placeholder="steps:
-  - name: step1
-    agent: agent-name
-    input: original
-  - name: step2
-    agent: another-agent
-    input: previous" required></textarea>
+
+                <!-- Visual Workflow Builder -->
+                <div class="workflow-builder">
+                    <label>Workflow Steps</label>
+                    <div class="workflow-builder-controls">
+                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                            <select id="agent-selector" class="agent-selector">
+                                <option value="">-- Select an agent to add --</option>
+                            </select>
+                        </div>
+                        <button type="button" onclick="app.addWorkflowStep()" class="btn btn-primary">
+                            ➕ Add Step
+                        </button>
+                    </div>
+
+                    <div id="workflow-steps-container" class="workflow-steps-container">
+                        <div class="workflow-empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <p>No steps yet. Select an agent and click "Add Step" to begin.</p>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="form-actions">
                     <button type="button" onclick="app.hideCreateWorkflow()" class="btn btn-secondary">Cancel</button>
                     <button type="submit" class="btn btn-primary">Create Workflow</button>

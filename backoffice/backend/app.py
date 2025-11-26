@@ -825,6 +825,41 @@ async def create_workflow(request: WorkflowCreateRequest):
         raise HTTPException(status_code=500, detail=f"Failed to create workflow: {str(e)}")
 
 
+@app.put("/api/workflows/{workflow_name}", tags=["workflows"], summary="Update a workflow")
+async def update_workflow(workflow_name: str, request: WorkflowCreateRequest):
+    """
+    Update an existing workflow definition.
+
+    This will overwrite the existing workflow file with the new configuration.
+    """
+    # Check if workflow exists
+    existing_workflow = workflow_manager.load_workflow(workflow_name)
+    if not existing_workflow:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
+
+    # If the name is changing, delete the old file
+    if request.name != workflow_name:
+        workflow_manager.delete_workflow(workflow_name)
+
+    workflow_config = {
+        "name": request.name,
+        "description": request.description,
+        "version": request.version,
+        "steps": request.steps,
+        "metadata": request.metadata or {}
+    }
+
+    try:
+        filepath = workflow_manager.save_workflow(workflow_config)
+        return {
+            "status": "updated",
+            "workflow_name": request.name,
+            "filepath": filepath
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update workflow: {str(e)}")
+
+
 @app.delete("/api/workflows/{workflow_name}", tags=["workflows"], summary="Delete a workflow")
 async def delete_workflow(workflow_name: str):
     """Delete a workflow definition"""

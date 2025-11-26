@@ -297,6 +297,11 @@ const app = {
     // Store step outputs for copying (indexed by step ID)
     stepOutputs: {},
 
+    // Workflow builder state
+    workflowSteps: [],
+    draggedStepIndex: null,
+    editingWorkflowName: null, // Track if we're editing an existing workflow
+
     // Initialize
     init() {
         //console.log('Initializing Backoffice App...');
@@ -793,6 +798,7 @@ const app = {
                 <p><strong>Version:</strong> ${workflow.version || 'N/A'}</p>
                 <div class="workflow-actions">
                     <button onclick="app.viewWorkflow('${workflow.name}')" class="btn btn-small btn-primary">View</button>
+                    <button onclick="app.editWorkflow('${workflow.name}')" class="btn btn-small btn-secondary">✏️ Edit</button>
                     <button onclick="app.runWorkflow('${workflow.name}')" class="btn btn-small btn-success">Run</button>
                     <button onclick="app.deleteWorkflow('${workflow.name}')" class="btn btn-small btn-danger">Delete</button>
                 </div>
@@ -809,6 +815,57 @@ const app = {
             await Dialog.alert(workflowHtml, `Workflow: ${workflow.name}`);
         } catch (error) {
             // Error already shown
+        }
+    },
+
+    async editWorkflow(workflowName) {
+        try {
+            // Load workflow data
+            const workflow = await this.apiCall(`/workflows/${workflowName}`);
+
+            // Set editing mode
+            this.editingWorkflowName = workflowName;
+
+            // Convert workflow steps to builder format
+            this.workflowSteps = workflow.steps.map((step, index) => ({
+                id: Date.now() + index,
+                name: step.name || `Step ${index + 1}`,
+                agent: step.agent,
+                input: step.input === 'original' ? 'original' :
+                       step.input === 'previous' ? 'previous' : 'custom',
+                customInput: (step.input !== 'original' && step.input !== 'previous') ? step.input : ''
+            }));
+
+            // Populate agent selector
+            const agentSelector = document.getElementById('agent-selector');
+            agentSelector.innerHTML = '<option value="">-- Select an agent to add --</option>';
+
+            Object.entries(this.state.agents).forEach(([name, agent]) => {
+                if (agent.status === 'healthy') {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = `${name}${agent.description ? ' - ' + agent.description : ''}`;
+                    agentSelector.appendChild(option);
+                }
+            });
+
+            // Populate form fields
+            document.getElementById('workflow-name').value = workflow.name;
+            document.getElementById('workflow-description').value = workflow.description || '';
+
+            // Update modal title and button
+            document.querySelector('#create-workflow-modal .modal-header h2').textContent = 'Edit Workflow';
+            document.querySelector('#create-workflow-form button[type="submit"]').textContent = 'Update Workflow';
+
+            // Render steps
+            this.renderWorkflowSteps();
+
+            // Show modal
+            document.getElementById('create-workflow-modal').classList.add('active');
+
+            Toast.info(`Editing workflow: ${workflowName}`);
+        } catch (error) {
+            Toast.error('Failed to load workflow for editing');
         }
     },
 
@@ -880,67 +937,326 @@ const app = {
     },
 
     showCreateWorkflow() {
+        // Reset editing mode
+        this.editingWorkflowName = null;
+
+        // Reset workflow steps
+        this.workflowSteps = [];
+
+        // Populate agent selector
+        const agentSelector = document.getElementById('agent-selector');
+        agentSelector.innerHTML = '<option value="">-- Select an agent to add --</option>';
+
+        Object.entries(this.state.agents).forEach(([name, agent]) => {
+            if (agent.status === 'healthy') {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = `${name}${agent.description ? ' - ' + agent.description : ''}`;
+                agentSelector.appendChild(option);
+            }
+        });
+
+        // Update modal title and button for create mode
+        document.querySelector('#create-workflow-modal .modal-header h2').textContent = 'Create New Workflow';
+        document.querySelector('#create-workflow-form button[type="submit"]').textContent = 'Create Workflow';
+
+        // Render empty state
+        this.renderWorkflowSteps();
+
         document.getElementById('create-workflow-modal').classList.add('active');
     },
 
     hideCreateWorkflow() {
         document.getElementById('create-workflow-modal').classList.remove('active');
         document.getElementById('create-workflow-form').reset();
+        this.workflowSteps = [];
+        this.editingWorkflowName = null;
+        this.renderWorkflowSteps();
+    },
+
+    // Workflow Builder Functions
+    addWorkflowStep() {
+        const agentSelector = document.getElementById('agent-selector');
+        const selectedAgent = agentSelector.value;
+
+        if (!selectedAgent) {
+            Toast.warning('Please select an agent first');
+            return;
+        }
+
+        const agent = this.state.agents[selectedAgent];
+        const stepNumber = this.workflowSteps.length + 1;
+
+        const step = {
+            id: Date.now(),
+            name: `Step ${stepNumber}`,
+            agent: selectedAgent,
+            input: stepNumber === 1 ? 'original' : 'previous',
+            customInput: ''
+        };
+
+        this.workflowSteps.push(step);
+        this.renderWorkflowSteps();
+
+        // Reset selector
+        agentSelector.value = '';
+
+        Toast.success(`Added ${selectedAgent} to workflow`);
+    },
+
+    removeWorkflowStep(stepId) {
+        const index = this.workflowSteps.findIndex(s => s.id === stepId);
+        if (index !== -1) {
+            this.workflowSteps.splice(index, 1);
+            this.renderWorkflowSteps();
+            Toast.info('Step removed');
+        }
+    },
+
+    updateWorkflowStep(stepId, field, value) {
+        const step = this.workflowSteps.find(s => s.id === stepId);
+        if (step) {
+            step[field] = value;
+        }
+    },
+
+    moveWorkflowStepUp(stepId) {
+        const index = this.workflowSteps.findIndex(s => s.id === stepId);
+        if (index > 0) {
+            const step = this.workflowSteps[index];
+            this.workflowSteps.splice(index, 1);
+            this.workflowSteps.splice(index - 1, 0, step);
+            this.renderWorkflowSteps();
+        }
+    },
+
+    moveWorkflowStepDown(stepId) {
+        const index = this.workflowSteps.findIndex(s => s.id === stepId);
+        if (index < this.workflowSteps.length - 1) {
+            const step = this.workflowSteps[index];
+            this.workflowSteps.splice(index, 1);
+            this.workflowSteps.splice(index + 1, 0, step);
+            this.renderWorkflowSteps();
+        }
+    },
+
+    renderWorkflowSteps() {
+        const container = document.getElementById('workflow-steps-container');
+
+        if (this.workflowSteps.length === 0) {
+            container.innerHTML = `
+                <div class="workflow-empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <p>No steps yet. Select an agent and click "Add Step" to begin.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const stepsHTML = this.workflowSteps.map((step, index) => {
+            const stepNumber = index + 1;
+            const agent = this.state.agents[step.agent];
+
+            return `
+                <div class="workflow-step-card" draggable="true" data-step-id="${step.id}" data-step-index="${index}">
+                    <div class="workflow-step-header">
+                        <div class="workflow-step-drag-handle" title="Drag to reorder">⋮⋮</div>
+                        <div class="workflow-step-number">${stepNumber}</div>
+                        <div class="workflow-step-info">
+                            <div class="workflow-step-name">
+                                <input type="text"
+                                       value="${step.name}"
+                                       onchange="app.updateWorkflowStep(${step.id}, 'name', this.value)"
+                                       style="border: none; background: transparent; color: var(--text-color); font-weight: 600; padding: 0; width: 100%;"
+                                       placeholder="Step name">
+                            </div>
+                            <div class="workflow-step-agent">
+                                <strong>${step.agent}</strong>
+                                ${agent && agent.description ? ` - ${agent.description}` : ''}
+                            </div>
+                        </div>
+                        <div class="workflow-step-actions">
+                            ${index > 0 ? `<button type="button" onclick="app.moveWorkflowStepUp(${step.id})" class="btn btn-small btn-secondary btn-icon" title="Move up">↑</button>` : ''}
+                            ${index < this.workflowSteps.length - 1 ? `<button type="button" onclick="app.moveWorkflowStepDown(${step.id})" class="btn btn-small btn-secondary btn-icon" title="Move down">↓</button>` : ''}
+                            <button type="button" onclick="app.removeWorkflowStep(${step.id})" class="btn btn-small btn-danger btn-icon" title="Remove">🗑</button>
+                        </div>
+                    </div>
+                    <div class="workflow-step-body">
+                        <div class="workflow-step-input-group">
+                            <label>Input Source</label>
+                            <select onchange="app.updateWorkflowStep(${step.id}, 'input', this.value)">
+                                <option value="original" ${step.input === 'original' ? 'selected' : ''}>Original Input</option>
+                                <option value="previous" ${step.input === 'previous' ? 'selected' : ''}>Previous Step Output</option>
+                                <option value="custom" ${step.input === 'custom' ? 'selected' : ''}>Custom Input</option>
+                            </select>
+                        </div>
+                        ${step.input === 'custom' ? `
+                            <div class="workflow-step-input-group">
+                                <label>Custom Input</label>
+                                <textarea
+                                    onchange="app.updateWorkflowStep(${step.id}, 'customInput', this.value)"
+                                    placeholder="Enter custom input for this step..."
+                                    rows="3">${step.customInput || ''}</textarea>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = stepsHTML;
+
+        // Setup drag and drop listeners
+        this.setupDragAndDrop();
+    },
+
+    setupDragAndDrop() {
+        const cards = document.querySelectorAll('.workflow-step-card');
+
+        cards.forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                card.classList.add('dragging');
+                this.draggedStepIndex = parseInt(card.dataset.stepIndex);
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            card.addEventListener('dragend', (e) => {
+                card.classList.remove('dragging');
+                this.draggedStepIndex = null;
+                // Remove all drop indicators
+                document.querySelectorAll('.workflow-step-card').forEach(c => {
+                    c.classList.remove('drop-above', 'drop-below');
+                });
+            });
+
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                if (this.draggedStepIndex === null) return;
+
+                const targetIndex = parseInt(card.dataset.stepIndex);
+                const rect = card.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+
+                // Remove previous indicators
+                document.querySelectorAll('.workflow-step-card').forEach(c => {
+                    c.classList.remove('drop-above', 'drop-below');
+                });
+
+                // Add indicator based on position
+                if (e.clientY < midpoint) {
+                    card.classList.add('drop-above');
+                } else {
+                    card.classList.add('drop-below');
+                }
+            });
+
+            card.addEventListener('drop', (e) => {
+                e.preventDefault();
+
+                if (this.draggedStepIndex === null) return;
+
+                const targetIndex = parseInt(card.dataset.stepIndex);
+                const rect = card.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+
+                let newIndex = targetIndex;
+                if (e.clientY >= midpoint && targetIndex < this.workflowSteps.length - 1) {
+                    newIndex = targetIndex + 1;
+                }
+
+                // Reorder steps
+                if (this.draggedStepIndex !== newIndex) {
+                    const step = this.workflowSteps[this.draggedStepIndex];
+                    this.workflowSteps.splice(this.draggedStepIndex, 1);
+
+                    // Adjust index if moving down
+                    if (this.draggedStepIndex < newIndex) {
+                        newIndex--;
+                    }
+
+                    this.workflowSteps.splice(newIndex, 0, step);
+                    this.renderWorkflowSteps();
+                }
+
+                // Remove drop indicators
+                document.querySelectorAll('.workflow-step-card').forEach(c => {
+                    c.classList.remove('drop-above', 'drop-below');
+                });
+            });
+        });
     },
 
     async createWorkflow() {
-        const name = document.getElementById('workflow-name').value;
-        const description = document.getElementById('workflow-description').value;
-        const configYaml = document.getElementById('workflow-config').value;
+        const name = document.getElementById('workflow-name').value.trim();
+        const description = document.getElementById('workflow-description').value.trim();
+        const isEditing = this.editingWorkflowName !== null;
 
-        // Parse YAML manually (simple approach)
-        try {
-            // For now, we'll create a simple workflow structure
-            // In production, you'd use a YAML parser library
-            const steps = this.parseSimpleYaml(configYaml);
+        // Validate
+        if (!name) {
+            Toast.error('Please enter a workflow name');
+            return;
+        }
 
-            const workflow = {
-                name,
-                description,
-                version: '1.0.0',
-                steps
+        if (this.workflowSteps.length === 0) {
+            Toast.error('Please add at least one step to the workflow');
+            return;
+        }
+
+        // Convert workflow steps to API format
+        const steps = this.workflowSteps.map((step, index) => {
+            const stepData = {
+                name: step.name,
+                agent: step.agent
             };
 
-            await this.apiCall('/workflows', {
-                method: 'POST',
-                body: JSON.stringify(workflow)
-            });
+            // Add input based on type
+            if (step.input === 'custom' && step.customInput) {
+                stepData.input = step.customInput;
+            } else if (step.input === 'original') {
+                stepData.input = 'original';
+            } else if (step.input === 'previous' && index > 0) {
+                stepData.input = 'previous';
+            } else if (index === 0) {
+                stepData.input = 'original';
+            } else {
+                stepData.input = 'previous';
+            }
 
-            Toast.success(`Workflow "${name}" created successfully!`);
+            return stepData;
+        });
+
+        const workflow = {
+            name,
+            description: description || `Workflow with ${steps.length} steps`,
+            version: '1.0.0',
+            steps
+        };
+
+        try {
+            if (isEditing) {
+                // Update existing workflow
+                await this.apiCall(`/workflows/${this.editingWorkflowName}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(workflow)
+                });
+                Toast.success(`Workflow "${name}" updated successfully!`);
+            } else {
+                // Create new workflow
+                await this.apiCall('/workflows', {
+                    method: 'POST',
+                    body: JSON.stringify(workflow)
+                });
+                Toast.success(`Workflow "${name}" created successfully!`);
+            }
+
             this.hideCreateWorkflow();
             this.loadWorkflows();
         } catch (error) {
-            Toast.error('Failed to create workflow. Check YAML format.');
+            const action = isEditing ? 'update' : 'create';
+            Toast.error(`Failed to ${action} workflow: ${error.message}`);
         }
-    },
-
-    parseSimpleYaml(yamlText) {
-        // Very simple YAML parser for steps
-        // In production, use js-yaml library
-        const steps = [];
-        const lines = yamlText.split('\n');
-        let currentStep = null;
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('- name:')) {
-                if (currentStep) steps.push(currentStep);
-                currentStep = { name: trimmed.split(':')[1].trim() };
-            } else if (currentStep) {
-                if (trimmed.startsWith('agent:')) {
-                    currentStep.agent = trimmed.split(':')[1].trim();
-                } else if (trimmed.startsWith('input:')) {
-                    currentStep.input = trimmed.split(':')[1].trim();
-                }
-            }
-        }
-        if (currentStep) steps.push(currentStep);
-        return steps;
     },
 
     // Execute Workflow
