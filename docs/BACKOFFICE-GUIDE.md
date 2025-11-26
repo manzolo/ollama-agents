@@ -9,22 +9,29 @@ I've created a **Dynamic Workflow Orchestrator** - a complete web-based backoffi
 ### 1. **Web UI** (http://localhost:8080)
 A modern, responsive interface with 4 main sections:
 
-> **📸 Screenshot Placeholder**: Main Backoffice UI showing all 4 tabs (Agents, Workflows, Execute, History)
+> <img width="1435" height="824" alt="image" src="https://github.com/user-attachments/assets/2c3bb16d-3d6f-41aa-8f19-074558932268" />
+Main Backoffice UI showing all 4 tabs (Agents, Workflows, Execute, History)
 
 - **Agents Tab**: Discover and test all available agents
   - Real-time health monitoring
   - Agent capabilities display
   - Quick test functionality
 
-> **📸 Screenshot Placeholder**: Agents tab showing agent list with health status and capabilities
+> <img width="1435" height="630" alt="image" src="https://github.com/user-attachments/assets/0f615fee-372a-476e-b35c-ac5634f1bbac" />
+Agents tab showing agent list with health status and capabilities
 
-- **Workflows Tab**: Manage workflow definitions
+> <img width="798" height="782" alt="image" src="https://github.com/user-attachments/assets/91d3f46e-1469-409d-a2fc-c971ea60a963" />
+Agent creation
+
+> <img width="1435" height="630" alt="image" src="https://github.com/user-attachments/assets/c163f36e-a6df-4268-aa25-818930c1ad73" />
+Manage workflow definitions
   - Create new workflows via UI
   - View workflow details
   - Delete workflows
   - Run workflows directly
 
-> **📸 Screenshot Placeholder**: Workflows tab showing available workflows and management options
+> <img width="1435" height="728" alt="image" src="https://github.com/user-attachments/assets/19691632-43e2-40b5-b486-daf30618d7c7" />
+Workflows tab showing available workflows and management options
 
 - **Execute Tab**: Run workflows with custom input
   - Select workflow from dropdown
@@ -32,7 +39,8 @@ A modern, responsive interface with 4 main sections:
   - View real-time execution results
   - See step-by-step progress
 
-> **📸 Screenshot Placeholder**: Execute tab showing workflow execution in progress with real-time results
+> <img width="1435" height="740" alt="image" src="https://github.com/user-attachments/assets/c2a832b9-79a0-4f59-9a0f-cc4b6560b60d" />
+Execute tab showing workflow execution in progress with real-time results
 
 - **History Tab**: Review past executions
   - Execution status and duration
@@ -40,7 +48,8 @@ A modern, responsive interface with 4 main sections:
   - Error details
   - Expandable results view
 
-> **📸 Screenshot Placeholder**: History tab showing past workflow executions with status and details
+> <img width="1435" height="640" alt="image" src="https://github.com/user-attachments/assets/da869587-c57b-4753-a7f9-5ac691622868" />
+History tab showing past workflow executions with status and details
 
 ### 2. **REST API** (http://localhost:8080/api)
 Complete API for programmatic access:
