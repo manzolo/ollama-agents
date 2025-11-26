@@ -584,8 +584,8 @@ const app = {
         // This will be called to show pending deployments
         const pending = this.state.agentDefinitions.filter(d => d.status === 'defined');
         if (pending.length > 0) {
-            // Could show a notification or section for pending deployments
-            console.log(`${pending.length} agent(s) pending deployment`);
+            // Show a notification for pending deployments
+            Toast.info(`${pending.length} agent(s) pending deployment`);
         }
     },
 
