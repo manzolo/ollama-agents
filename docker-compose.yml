@@ -53,34 +53,26 @@ services:
     ports:
       - "${BACKOFFICE_PORT:-8080}:8000"
     volumes:
-      # Application code (read-only)
-      - ./backoffice/backend/orchestrator.py:/app/orchestrator.py:ro
-      - ./backoffice/backend/app.py:/app/app.py:ro
-      - ./backoffice/backend/agent_manager.py:/app/agent_manager.py:ro
-      - ./backoffice/backend/deployment_manager.py:/app/deployment_manager.py:ro
-      - ./backoffice/frontend:/app/frontend:ro
       # Data directories (read-write)
       - ./backoffice/workflows:/app/workflows
       - ./backoffice/agent-definitions:/app/agent-definitions
-      # Project root for deployment (read-write)
+      # Project root for deployment operations
       - .:/project
-      # Docker socket for deployment
+      # Docker socket for container management
       - /var/run/docker.sock:/var/run/docker.sock
+      # Development mode: Uncomment to enable live code reloading
+      # - ./backoffice/backend:/app:ro
+      # - ./backoffice/frontend:/app/frontend:ro
     networks:
       - agent-network
     environment:
-      - WORKFLOWS_DIR=/app/workflows
-      - FRONTEND_DIR=/app/frontend
-      - AGENT_DEFINITIONS_DIR=/app/agent-definitions
-      - PROJECT_ROOT=/project
-      - SWARM_CONVERTER_URL=http://agent-swarm-converter:8000
-      - SWARM_VALIDATOR_URL=http://agent-swarm-validator:8000
+      - WORKFLOWS_DIR=${WORKFLOWS_DIR}
+      - FRONTEND_DIR=${FRONTEND_DIR}
+      - AGENT_DEFINITIONS_DIR=${AGENT_DEFINITIONS_DIR}
+      - PROJECT_ROOT=${PROJECT_ROOT}
+      - SWARM_CONVERTER_URL=${SWARM_CONVERTER_URL}
+      - SWARM_VALIDATOR_URL=${SWARM_VALIDATOR_URL}
       - OLLAMA_HOST=http://ollama:11434
-    #depends_on:
-    #  swarm-converter:
-    #    condition: service_healthy
-    #  swarm-validator:
-    #    condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
