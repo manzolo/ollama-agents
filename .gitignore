@@ -54,7 +54,7 @@ temp/
 tmp/
 TODO.txt
 
-# Runtime - User-created agents (completely gitignored)
+# Runtime - User-created agents and workflows (completely gitignored)
 runtime/
 
 # Legacy folders - Deprecated, moved to examples/

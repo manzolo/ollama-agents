@@ -29,11 +29,17 @@ from plugin_manager import PluginRegistry, PluginValidator, PluginManifest
 # ============================================================================
 # Configuration
 # ============================================================================
-WORKFLOWS_DIR = Path(os.getenv("WORKFLOWS_DIR", "/app/workflows"))
-FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "/app/frontend"))
+# Runtime directories (user-created, gitignored)
+WORKFLOWS_DIR = Path(os.getenv("WORKFLOWS_DIR", "/app/runtime/workflows"))
 AGENT_DEFINITIONS_DIR = Path(os.getenv("AGENT_DEFINITIONS_DIR", "/app/runtime/agent-definitions"))
 COMPOSE_DIR = Path(os.getenv("COMPOSE_DIR", "/app/runtime/compose"))
+
+# Examples directories (git-tracked templates)
+WORKFLOWS_EXAMPLES_DIR = Path(os.getenv("WORKFLOWS_EXAMPLES_DIR", "/app/examples/workflows"))
 EXAMPLES_DIR = Path(os.getenv("EXAMPLES_DIR", "/app/examples"))
+
+# Other paths
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "/app/frontend"))
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "/project"))
 
 # Initialize Plugin Registry (replaces static AGENT_REGISTRY)
@@ -142,7 +148,7 @@ app.add_middleware(
 )
 
 # Initialize components
-workflow_manager = WorkflowManager(WORKFLOWS_DIR)
+workflow_manager = WorkflowManager(WORKFLOWS_DIR, WORKFLOWS_EXAMPLES_DIR)
 agent_manager = AgentManager(AGENT_DEFINITIONS_DIR)
 deployment_manager = DeploymentManager(PROJECT_ROOT)
 
@@ -172,7 +178,8 @@ async def health_check():
         "status": "healthy",
         "service": "backoffice",
         "timestamp": datetime.now().isoformat(),
-        "workflows_dir": str(WORKFLOWS_DIR),
+        "workflows_runtime": str(WORKFLOWS_DIR),
+        "workflows_examples": str(WORKFLOWS_EXAMPLES_DIR),
         "registered_agents": len(plugin_registry.list_all())
     }
 
@@ -964,7 +971,8 @@ async def startup_event():
     global orchestrator
 
     print(f"Starting Backoffice API...")
-    print(f"Workflows directory: {WORKFLOWS_DIR}")
+    print(f"Workflows (runtime): {WORKFLOWS_DIR}")
+    print(f"Workflows (examples): {WORKFLOWS_EXAMPLES_DIR}")
     print(f"Agent definitions directory: {AGENT_DEFINITIONS_DIR}")
     print(f"Compose directory: {COMPOSE_DIR}")
     print(f"Examples directory: {EXAMPLES_DIR}")

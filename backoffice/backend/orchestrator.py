@@ -345,50 +345,97 @@ class WorkflowOrchestrator:
 class WorkflowManager:
     """Manages workflow definitions and executions"""
 
-    def __init__(self, workflows_dir: Path):
+    def __init__(self, workflows_dir: Path, examples_dir: Path = None):
+        # Primary directory for user workflows (runtime, gitignored)
         self.workflows_dir = Path(workflows_dir)
         self.workflows_dir.mkdir(parents=True, exist_ok=True)
+
+        # Examples directory for template workflows (git-tracked)
+        self.examples_dir = Path(examples_dir) if examples_dir else None
+        if self.examples_dir:
+            self.examples_dir.mkdir(parents=True, exist_ok=True)
+
         self._workflow_cache = {}
 
     def list_workflows(self) -> List[Dict[str, Any]]:
-        """List all available workflows"""
+        """List all available workflows from both examples and runtime directories"""
         workflows = []
+        workflow_names = set()  # Track names to avoid duplicates
+
+        # First, scan runtime workflows (user-created, higher priority)
         for filepath in self.workflows_dir.glob("*.yml"):
             try:
                 workflow = Workflow.from_file(filepath)
+                workflow_names.add(workflow.name)
                 workflows.append({
                     "name": workflow.name,
                     "description": workflow.description,
                     "version": workflow.version,
                     "steps": len(workflow.steps),
-                    "file": filepath.name
+                    "file": filepath.name,
+                    "source": "runtime"
                 })
             except Exception as e:
                 workflows.append({
                     "name": filepath.stem,
                     "error": f"Failed to load: {str(e)}",
-                    "file": filepath.name
+                    "file": filepath.name,
+                    "source": "runtime"
                 })
+
+        # Then, scan example workflows (git-tracked templates)
+        if self.examples_dir:
+            for filepath in self.examples_dir.glob("*.yml"):
+                try:
+                    workflow = Workflow.from_file(filepath)
+                    # Skip if already loaded from runtime (user override)
+                    if workflow.name not in workflow_names:
+                        workflows.append({
+                            "name": workflow.name,
+                            "description": workflow.description,
+                            "version": workflow.version,
+                            "steps": len(workflow.steps),
+                            "file": filepath.name,
+                            "source": "examples"
+                        })
+                except Exception as e:
+                    if filepath.stem not in workflow_names:
+                        workflows.append({
+                            "name": filepath.stem,
+                            "error": f"Failed to load: {str(e)}",
+                            "file": filepath.name,
+                            "source": "examples"
+                        })
+
         return workflows
 
     def load_workflow(self, name: str) -> Optional[Workflow]:
-        """Load a workflow by name"""
+        """Load a workflow by name from runtime or examples directory"""
         # Check cache first
         if name in self._workflow_cache:
             return self._workflow_cache[name]
 
-        # Try to find workflow file
+        # Try runtime directory first (user workflows take priority)
         filepath = self.workflows_dir / f"{name}.yml"
-        if not filepath.exists():
-            return None
+        if filepath.exists():
+            workflow = Workflow.from_file(filepath)
+            self._workflow_cache[name] = workflow
+            return workflow
 
-        workflow = Workflow.from_file(filepath)
-        self._workflow_cache[name] = workflow
-        return workflow
+        # Fall back to examples directory
+        if self.examples_dir:
+            filepath = self.examples_dir / f"{name}.yml"
+            if filepath.exists():
+                workflow = Workflow.from_file(filepath)
+                self._workflow_cache[name] = workflow
+                return workflow
+
+        return None
 
     def save_workflow(self, workflow_config: Dict[str, Any]) -> str:
-        """Save a workflow configuration"""
+        """Save a workflow configuration to runtime directory"""
         name = workflow_config.get("name", "unnamed")
+        # Always save to runtime directory (user workflows)
         filepath = self.workflows_dir / f"{name}.yml"
 
         with open(filepath, "w") as f:
@@ -401,7 +448,8 @@ class WorkflowManager:
         return str(filepath)
 
     def delete_workflow(self, name: str) -> bool:
-        """Delete a workflow"""
+        """Delete a workflow from runtime directory only (example workflows cannot be deleted)"""
+        # Only delete from runtime directory - example workflows are read-only
         filepath = self.workflows_dir / f"{name}.yml"
         if filepath.exists():
             filepath.unlink()

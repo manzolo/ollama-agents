@@ -53,11 +53,9 @@ services:
     ports:
       - "${BACKOFFICE_PORT:-8080}:8000"
     volumes:
-      # Workflow definitions (read-write)
-      - ./backoffice/workflows:/app/workflows
-      # Runtime directories (user-created agents, read-write)
+      # Runtime directories (user-created agents and workflows, read-write)
       - ./runtime:/app/runtime
-      # Examples (base agents in git, read-only)
+      # Examples (base agents and workflow templates in git, read-only)
       - ./examples:/app/examples:ro
       # Project root for deployment operations
       - .:/project
