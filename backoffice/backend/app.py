@@ -613,6 +613,7 @@ async def delete_agent_completely(agent_name: str, remove_files: bool = True):
     3. Remove from .env
     4. Delete agent files (if remove_files=true)
     5. Delete agent definition
+    6. Remove from agent registry
 
     Warning: This is irreversible!
     """
@@ -621,6 +622,16 @@ async def delete_agent_completely(agent_name: str, remove_files: bool = True):
 
     # Also delete the agent definition
     agent_manager.delete_agent_definition(agent_name)
+
+    # Remove from orchestrator registry
+    if agent_name in orchestrator.agent_registry:
+        del orchestrator.agent_registry[agent_name]
+        print(f"Removed {agent_name} from orchestrator registry")
+
+    # Remove from static AGENT_REGISTRY if present
+    if agent_name in AGENT_REGISTRY:
+        del AGENT_REGISTRY[agent_name]
+        print(f"Removed {agent_name} from static registry")
 
     if result["status"] == "failed":
         raise HTTPException(

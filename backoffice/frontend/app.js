@@ -595,9 +595,16 @@ const app = {
             if (result.status === 'success') {
                 Toast.success(`Agent "${agentName}" deployed successfully!` +
                     (result.gpu_mode ? ' (GPU mode detected)' : ''));
-                this.loadAgents();
+
+                // Wait a bit longer for the container to fully start before reloading
+                Toast.info(`Waiting for agent to become healthy...`);
+                setTimeout(() => {
+                    this.loadAgents();
+                    Toast.success(`Agent "${agentName}" is now available!`);
+                }, 5000);
             } else {
                 Toast.warning(`Agent deployed with issues: ${result.message}`);
+                setTimeout(() => this.loadAgents(), 2000);
             }
         } catch (error) {
             console.error('Deployment failed:', error);
@@ -671,7 +678,8 @@ const app = {
                 method: 'DELETE'
             });
             Toast.success(`Agent "${agentName}" deleted successfully!`);
-            setTimeout(() => this.loadAgents(), 1000);
+            // Reload immediately to remove from UI
+            this.loadAgents();
         } catch (error) {
             console.error('Delete failed:', error);
         }

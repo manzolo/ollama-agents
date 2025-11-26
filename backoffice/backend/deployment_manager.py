@@ -105,8 +105,8 @@ services:
     ports:
       - "${{{env_prefix}_PORT:-{port}}}:8000"
     volumes:
-      - ./agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
-      - ./agents/{agent_name}/config.yml:/app/config.yml:ro
+      - ./runtime/agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
+      - ./runtime/agents/{agent_name}/config.yml:/app/config.yml:ro
       - ./shared/context/{agent_name}:/app/context
     networks:
       - agent-network
@@ -116,6 +116,9 @@ services:
       - MODEL_NAME=${{{env_prefix}_MODEL:-{model}}}
       - TEMPERATURE=${{{env_prefix}_TEMPERATURE:-{temperature}}}
       - MAX_TOKENS=${{{env_prefix}_MAX_TOKENS:-{max_tokens}}}
+    depends_on:
+      ollama:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
