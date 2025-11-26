@@ -27,36 +27,7 @@ class DeploymentManager:
         # Directory for individual agent compose files (runtime, git-ignored)
         self.agents_compose_dir = self.project_root / "runtime" / "compose"
         self.agents_compose_dir.mkdir(parents=True, exist_ok=True)
-        # Separate env files: base (git-tracked) and agents (git-ignored)
-        self.env_path = self.project_root / ".env"
-        self.env_agents_path = self.project_root / ".env.agents"
-        # Ensure .env.agents exists with proper header
-        if not self.env_agents_path.exists():
-            header = """# ============================================================================
-# DYNAMIC AGENT CONFIGURATIONS
-# ============================================================================
-# ⚠️  AUTO-MANAGED FILE - DO NOT EDIT MANUALLY
-#
-# This file is automatically managed by the backoffice when you:
-# - Create a new agent → variables added
-# - Delete an agent → variables removed
-#
-# This file is gitignored to keep dynamic runtime configs separate from
-# the git-tracked .env file.
-# ============================================================================
-#
-# Format for each agent:
-# AGENT_NAME_PORT=7XXX
-# AGENT_NAME_MODEL=llama3.2
-# AGENT_NAME_TEMPERATURE=0.7
-# AGENT_NAME_MAX_TOKENS=4096
-# ============================================================================
-
-# Agent configurations will appear below (auto-generated)
-# ----------------------------------------------------------------------------
-
-"""
-            self.env_agents_path.write_text(header)
+        # Note: .env.agents is no longer used - compose files have defaults from plugin.yml
         # Runtime agents directory (user-created, git-ignored)
         self.agents_dir = self.project_root / "runtime" / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)
@@ -320,52 +291,17 @@ networks:
 
     def update_env_file(self, agent_definition: Dict[str, Any]) -> bool:
         """
-        Update .env.agents file with agent environment variables.
-        Uses separate .env.agents file to avoid modifying git-tracked .env.
+        No-op: .env.agents is no longer used.
+        Configuration is embedded in compose files with defaults from plugin.yml.
 
         Args:
             agent_definition: Agent configuration
 
         Returns:
-            bool: Success status
+            bool: Always True (no-op)
         """
-        try:
-            agent_name = agent_definition["agent"]["name"]
-            port = agent_definition["deployment"]["port"]
-            model = agent_definition["deployment"]["model"]
-            temperature = agent_definition["deployment"]["temperature"]
-            max_tokens = agent_definition["deployment"]["max_tokens"]
-
-            env_prefix = agent_name.upper().replace("-", "_")
-
-            # Read current .env.agents
-            env_content = ""
-            if self.env_agents_path.exists():
-                with open(self.env_agents_path, "r") as f:
-                    env_content = f.read()
-
-            # Check if already exists
-            if f"{env_prefix}_PORT" in env_content:
-                print(f"Agent {agent_name} already in .env.agents")
-                return True
-
-            # Append new variables to .env.agents (not .env!)
-            new_env = f"\n# ----------------------------------------------------------------------------\n"
-            new_env += f"# {agent_name.title().replace('-', ' ')} Agent Configuration\n"
-            new_env += f"# ----------------------------------------------------------------------------\n"
-            new_env += f"{env_prefix}_PORT={port}\n"
-            new_env += f"{env_prefix}_MODEL={model}\n"
-            new_env += f"{env_prefix}_TEMPERATURE={temperature}\n"
-            new_env += f"{env_prefix}_MAX_TOKENS={max_tokens}\n"
-
-            with open(self.env_agents_path, "a") as f:
-                f.write(new_env)
-
-            return True
-
-        except Exception as e:
-            print(f"Error updating .env.agents: {e}")
-            return False
+        # No longer needed - compose files have defaults from plugin.yml
+        return True
 
     def deploy_agent(self, agent_name: str, agent_definition: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -653,32 +589,8 @@ networks:
                 result["errors"].append(f"Failed to remove compose file: {str(e)}")
                 result["steps"][-1]["status"] = "failed"
 
-            # Step 3: Remove from .env.agents (not .env!)
-            result["steps"].append({"step": "remove_from_env", "status": "running"})
-            try:
-                if self.env_agents_path.exists():
-                    with open(self.env_agents_path, "r") as f:
-                        content = f.read()
-                    env_prefix = agent_name.upper().replace("-", "_")
-                    lines = content.split('\n')
-                    new_lines = []
-                    skip_section = False
-                    for line in lines:
-                        if f"# {agent_name.title().replace('-', ' ')} Agent Configuration" in line:
-                            skip_section = True
-                            continue
-                        if skip_section:
-                            if line.startswith(env_prefix) or line.startswith('#'):
-                                continue
-                            else:
-                                skip_section = False
-                        new_lines.append(line)
-                    with open(self.env_agents_path, "w") as f:
-                        f.write('\n'.join(new_lines))
-                result["steps"][-1]["status"] = "completed"
-            except Exception as e:
-                result["errors"].append(f".env.agents update failed: {str(e)}")
-                result["steps"][-1]["status"] = "failed"
+            # Step 3: Remove from env (no-op - .env.agents no longer used)
+            result["steps"].append({"step": "remove_from_env", "status": "completed"})
 
             # Step 4: Optionally delete agent files on disk
             if remove_files:
