@@ -5,18 +5,24 @@ Provides REST API for managing agents and executing workflows.
 """
 
 import os
+import re
+import yaml
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field
 import uvicorn
+import httpx
 
 from orchestrator import WorkflowOrchestrator, WorkflowManager, Workflow
+from agent_manager import AgentManager, AgentDefinition
+from deployment_manager import DeploymentManager
 
 
 # ============================================================================
@@ -24,6 +30,8 @@ from orchestrator import WorkflowOrchestrator, WorkflowManager, Workflow
 # ============================================================================
 WORKFLOWS_DIR = Path(os.getenv("WORKFLOWS_DIR", "/app/workflows"))
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "/app/frontend"))
+AGENT_DEFINITIONS_DIR = Path(os.getenv("AGENT_DEFINITIONS_DIR", "/app/agent-definitions"))
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "/project"))
 
 # Agent Registry - Maps agent names to their internal URLs
 AGENT_REGISTRY = {
@@ -55,6 +63,26 @@ class AgentTestRequest(BaseModel):
     """Request to test an agent"""
     agent_name: str = Field(..., description="Name of the agent to test")
     input: str = Field(..., description="Test input")
+
+
+class AgentCreateRequest(BaseModel):
+    """Request to create a new agent"""
+    name: str = Field(..., description="Agent name (alphanumeric with hyphens)", pattern="^[a-z0-9-]+$")
+    description: str = Field(..., description="Agent description")
+    port: int = Field(..., description="Port number (7000-7999)", ge=7000, le=7999)
+    model: str = Field("llama3.2", description="Model to use")
+    temperature: float = Field(0.7, description="Temperature (0.0-1.0)", ge=0.0, le=1.0)
+    max_tokens: int = Field(4096, description="Max tokens", ge=256, le=32768)
+    capabilities: List[str] = Field(default_factory=list, description="Agent capabilities")
+    system_prompt: str = Field(..., description="System prompt for the agent")
+
+
+class PromptGenerateRequest(BaseModel):
+    """Request to generate an agent prompt using AI"""
+    agent_purpose: str = Field(..., description="What should this agent do?")
+    agent_expertise: str = Field("", description="What domain expertise should it have?")
+    input_format: str = Field("", description="What format of input will it receive?")
+    output_format: str = Field("", description="What format should the output be?")
 
 
 # ============================================================================
@@ -116,6 +144,8 @@ app.add_middleware(
 # Initialize components
 workflow_manager = WorkflowManager(WORKFLOWS_DIR)
 orchestrator = WorkflowOrchestrator(AGENT_REGISTRY)
+agent_manager = AgentManager(AGENT_DEFINITIONS_DIR)
+deployment_manager = DeploymentManager(PROJECT_ROOT)
 
 # Store for workflow executions (in-memory for now)
 executions = {}
@@ -149,6 +179,83 @@ async def health_check():
 # Agent Endpoints
 # ============================================================================
 
+async def discover_runtime_agents() -> Dict[str, Any]:
+    """
+    Helper to discover all running agents from Docker and static definitions.
+    Returns a dictionary of agent info.
+    """
+    # Get running agents from Docker
+    discovered_agents = {}
+
+    if deployment_manager.docker_client:
+        try:
+            # Use low-level API to avoid crashes from "ghost" containers
+            # client.containers.list() tries to inspect every container and crashes if one is dead/missing
+            containers = deployment_manager.docker_client.api.containers(all=True)
+            
+            for c_dict in containers:
+                try:
+                    # Parse container info from dict
+                    c_id = c_dict.get('Id')
+                    names = c_dict.get('Names', [])
+                    status = c_dict.get('State', 'unknown')
+                    
+                    # Names usually come as ['/name']
+                    name = names[0].lstrip('/') if names else ""
+                    
+                    if not name.startswith("agent-"):
+                        continue
+
+                    agent_name = name.replace("agent-", "")
+                    
+                    # Prioritize internal Docker network URL
+                    url = f"http://{name}:8000"
+                    
+                    agent_info = {
+                        "name": agent_name,
+                        "url": url,
+                        "container_status": status,
+                        "status": "stopped"
+                    }
+
+                    if status == "running":
+                        # Try to get agent info via health/info endpoint
+                        try:
+                            async with httpx.AsyncClient(timeout=2.0) as client:
+                                response = await client.get(f"{url}/info")
+                                if response.status_code == 200:
+                                    info = response.json()
+                                    agent_info.update(info)
+                                    agent_info["status"] = "healthy"
+                                else:
+                                    agent_info["status"] = "unhealthy"
+                        except Exception:
+                            # Container is running but not responsive yet
+                            agent_info["status"] = "starting"
+                    
+                    discovered_agents[agent_name] = agent_info
+
+                except Exception as e:
+                    # Log error but don't crash the loop
+                    print(f"Error processing container {c_dict.get('Id', 'unknown')}: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"Error discovering agents: {e}")
+
+    # Merge with original discovery (for backwards compatibility)
+    # Only add from original if not already discovered
+    try:
+        original_agents = await orchestrator.discover_agents()
+        for name, info in original_agents.items():
+            if name not in discovered_agents:
+                discovered_agents[name] = info
+    except Exception as e:
+        print(f"Error in original discovery: {e}")
+        
+    return discovered_agents
+
+
 @app.get("/api/agents", tags=["agents"], summary="List all agents")
 async def list_agents():
     """
@@ -160,11 +267,37 @@ async def list_agents():
     - Model being used
     - Capabilities
     - Description
+
+    This endpoint now discovers ALL agents by scanning:
+    1. Docker containers with prefix "agent-"
+    2. Agent definitions waiting to be deployed
     """
-    agents = await orchestrator.discover_agents()
+    discovered_agents = await discover_runtime_agents()
+    
+    # Sync with orchestrator registry so workflows can use these agents
+    for name, info in discovered_agents.items():
+        if info.get("url"):
+            orchestrator.agent_registry[name] = info["url"]
+
+    print(f"Returning {len(discovered_agents)} agents: {list(discovered_agents.keys())}")
+    # import json
+    # print(json.dumps(discovered_agents, indent=2))
+
     return {
-        "count": len(agents),
-        "agents": agents
+        "count": len(discovered_agents),
+        "agents": discovered_agents
+    }
+
+
+@app.get("/api/agents/definitions", tags=["agents"], summary="List agent definitions")
+async def list_agent_definitions():
+    """
+    List all agent definitions (both deployed and pending).
+    """
+    definitions = agent_manager.list_agent_definitions()
+    return {
+        "count": len(definitions),
+        "definitions": definitions
     }
 
 
@@ -189,6 +322,15 @@ async def test_agent(request: AgentTestRequest):
     This endpoint allows you to quickly test if an agent is working correctly
     by sending it test input and seeing the response.
     """
+    # Ensure agent is known to orchestrator
+    if request.agent_name not in orchestrator.agent_registry:
+        # Try to discover agents and update registry
+        print(f"Agent {request.agent_name} not in registry, discovering...")
+        agents = await discover_runtime_agents()
+        for name, info in agents.items():
+            if info.get("url"):
+                orchestrator.agent_registry[name] = info["url"]
+    
     result = await orchestrator.call_agent(
         agent_name=request.agent_name,
         input_text=request.input
@@ -201,6 +343,294 @@ async def test_agent(request: AgentTestRequest):
         )
 
     return result
+
+
+@app.get("/api/agents/{agent_name}/deploy-script", tags=["agents"], summary="Get deploy script")
+async def get_deploy_script(agent_name: str):
+    """
+    Get the deployment script for an agent.
+    Download and run this script to deploy the agent.
+    """
+    try:
+        script = agent_manager.generate_deploy_script(agent_name)
+        return PlainTextResponse(
+            content=script,
+            media_type="text/x-shellscript",
+            headers={
+                "Content-Disposition": f"attachment; filename=deploy-{agent_name}.sh"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/agents/create", tags=["agents"], summary="Create a new agent")
+async def create_agent(request: AgentCreateRequest):
+    """
+    Create a new agent definition.
+
+    This endpoint creates a declarative agent definition file that can be
+    deployed using the provided deploy script or CLI tool.
+
+    This modular approach:
+    - Separates definition from deployment
+    - No direct filesystem access needed
+    - Easy to version control
+    - Can be deployed manually or automatically
+    """
+    try:
+        # Create agent definition
+        agent_def = AgentDefinition(
+            name=request.name,
+            description=request.description,
+            port=request.port,
+            model=request.model,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            capabilities=request.capabilities,
+            system_prompt=request.system_prompt
+        )
+
+        # Save agent definition
+        definition_file = agent_manager.save_agent_definition(agent_def)
+
+        # Generate deploy script
+        deploy_script = agent_manager.generate_deploy_script(request.name)
+
+        return {
+            "status": "created",
+            "agent_name": request.name,
+            "message": f"Agent definition created successfully!",
+            "details": {
+                "definition_file": definition_file,
+                "port": request.port,
+                "model": request.model,
+                "deploy_script": deploy_script
+            },
+            "next_steps": [
+                f"Download the deploy script from /api/agents/{request.name}/deploy-script",
+                "Run the script: bash deploy-script.sh",
+                "Or manually add the service to docker-compose.yml",
+                f"Test the agent: curl http://localhost:{request.port}/health"
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create agent definition: {str(e)}"
+        )
+
+
+@app.delete("/api/agents/definitions/{agent_name}", tags=["agents"], summary="Delete agent definition")
+async def delete_agent_definition(agent_name: str):
+    """Delete an agent definition"""
+    success = agent_manager.delete_agent_definition(agent_name)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent definition '{agent_name}' not found"
+        )
+
+    return {
+        "status": "deleted",
+        "agent_name": agent_name,
+        "message": "Agent definition deleted. The deployed agent (if any) is not affected."
+    }
+
+
+@app.post("/api/agents/generate-prompt", tags=["agents"], summary="Generate agent prompt with AI")
+async def generate_agent_prompt(request: PromptGenerateRequest):
+    """
+    Use AI to generate a well-structured agent prompt based on user requirements.
+
+    This uses Ollama directly to help users write better agent prompts.
+    """
+    # Meta-prompt for generating agent prompts
+    meta_prompt = f"""You are an expert at writing system prompts for AI agents.
+
+Create a comprehensive, well-structured system prompt for an AI agent with these requirements:
+
+**Purpose:** {request.agent_purpose}
+{f"**Expertise Domain:** {request.agent_expertise}" if request.agent_expertise else ""}
+{f"**Input Format:** {request.input_format}" if request.input_format else ""}
+{f"**Output Format:** {request.output_format}" if request.output_format else ""}
+
+Create a system prompt that includes:
+1. A clear role definition
+2. The agent's expertise and capabilities
+3. Step-by-step task instructions
+4. Guidelines and best practices
+5. Output format specification
+6. Any constraints or limitations
+
+Format the prompt professionally with markdown headers (##) and bullet points.
+Make it clear, actionable, and comprehensive.
+
+Return ONLY the system prompt itself, ready to use. Do not include explanations or meta-commentary."""
+
+    try:
+        # Call Ollama directly
+        import httpx
+        ollama_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{ollama_host}/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": meta_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 2048
+                    }
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            generated_prompt = result.get("response", "")
+
+            return {
+                "status": "success",
+                "generated_prompt": generated_prompt.strip(),
+                "message": "Prompt generated successfully! Review and edit as needed."
+            }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate prompt: {str(e)}"
+        )
+
+
+@app.post("/api/agents/{agent_name}/deploy", tags=["agents"], summary="Deploy an agent")
+async def deploy_agent(agent_name: str):
+    """
+    Fully deploy an agent with one click.
+
+    This endpoint:
+    1. Loads the agent definition
+    2. Creates all necessary files
+    3. Updates docker-compose.yml and .env
+    4. Builds and starts the container
+    5. Detects and handles GPU mode automatically
+    """
+    try:
+        # Load agent definition
+        definition = agent_manager.get_agent_definition(agent_name)
+        if not definition:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent definition '{agent_name}' not found"
+            )
+
+        # Deploy the agent
+        result = deployment_manager.deploy_agent(agent_name, definition)
+
+        if result["status"] == "success":
+            return {
+                "status": "success",
+                "message": f"Agent '{agent_name}' deployed successfully!",
+                "details": result,
+                "gpu_mode": result.get("gpu_mode", False)
+            }
+        elif result["status"] == "partial":
+            return {
+                "status": "partial",
+                "message": f"Agent files created but container deployment failed",
+                "details": result
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Deployment failed: {', '.join(result['errors'])}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Deployment error: {str(e)}"
+        )
+
+
+@app.get("/api/agents/{agent_name}/status", tags=["agents"], summary="Get agent deployment status")
+async def get_agent_deployment_status(agent_name: str):
+    """
+    Get the deployment status of an agent.
+
+    Returns information about:
+    - Files existence
+    - Docker compose configuration
+    - Environment variables
+    - Container status
+    - Health status
+    """
+    status = deployment_manager.get_agent_status(agent_name)
+    return status
+
+
+@app.post("/api/agents/{agent_name}/restart", tags=["agents"], summary="Restart an agent")
+async def restart_agent_container(agent_name: str):
+    """Restart an agent's container"""
+    result = deployment_manager.restart_agent(agent_name)
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.post("/api/agents/{agent_name}/stop", tags=["agents"], summary="Stop an agent")
+async def stop_agent_container(agent_name: str):
+    """Stop an agent's container"""
+    result = deployment_manager.stop_agent(agent_name)
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["message"])
+    return result
+
+
+@app.post("/api/agents/{agent_name}/start", tags=["agents"], summary="Start a stopped agent")
+async def start_agent_container(agent_name: str):
+    """Start a stopped agent container using docker-compose"""
+    result = deployment_manager.start_agent(agent_name)
+    if result["status"] == "success":
+        return result
+    else:
+        raise HTTPException(status_code=500, detail=result["message"])
+
+
+@app.delete("/api/agents/{agent_name}", tags=["agents"], summary="Delete an agent completely")
+async def delete_agent_completely(agent_name: str, remove_files: bool = True):
+    """
+    Completely delete an agent.
+
+    This will:
+    1. Stop and remove the container
+    2. Remove from docker-compose.yml
+    3. Remove from .env
+    4. Delete agent files (if remove_files=true)
+    5. Delete agent definition
+
+    Warning: This is irreversible!
+    """
+    # Delete from deployment
+    result = deployment_manager.delete_agent(agent_name, remove_files)
+
+    # Also delete the agent definition
+    agent_manager.delete_agent_definition(agent_name)
+
+    if result["status"] == "failed":
+        raise HTTPException(
+            status_code=500,
+            detail=f"Deletion failed: {', '.join(result['errors'])}"
+        )
+
+    return {
+        "status": result["status"],
+        "message": f"Agent '{agent_name}' deleted successfully",
+        "details": result
+    }
 
 
 # ============================================================================
@@ -376,10 +806,12 @@ async def startup_event():
     """Initialize on startup"""
     print(f"Starting Backoffice API...")
     print(f"Workflows directory: {WORKFLOWS_DIR}")
+    print(f"Agent definitions directory: {AGENT_DEFINITIONS_DIR}")
     print(f"Registered agents: {list(AGENT_REGISTRY.keys())}")
 
-    # Ensure workflows directory exists
+    # Ensure directories exist
     WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+    AGENT_DEFINITIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.on_event("shutdown")

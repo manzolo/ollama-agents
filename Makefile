@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu
+.PHONY: help wizard up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu show-compose-files
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -13,6 +13,15 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
+
+# ============================================================================
+# Dynamic Agent Compose Files
+# ============================================================================
+# Find all agent compose files in docker-compose.agents/ directory
+AGENT_COMPOSE_FILES := $(wildcard docker-compose.agents/*.yml)
+# Build compose file arguments: -f docker-compose.yml -f docker-compose.agents/agent1.yml -f docker-compose.agents/agent2.yml ...
+COMPOSE_FILES := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
+COMPOSE_FILES_GPU := $(COMPOSE_FILES) -f docker-compose.gpu.yml
 
 # ============================================================================
 # Help
@@ -34,6 +43,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)restart$(NC)             Restart services"
 	@echo "  $(GREEN)status$(NC)              Show service status"
 	@echo "  $(GREEN)health$(NC)              Check agent health"
+	@echo "  $(GREEN)show-compose-files$(NC) Show active compose files"
 	@echo ""
 	@echo "$(YELLOW)🤖 AGENT OPERATIONS$(NC)"
 	@echo "  $(GREEN)run$(NC)                 Run agent with file (agent=X file=Y)"
@@ -147,35 +157,35 @@ wizard: ## Interactive setup guide
 # ============================================================================
 up: ## Start all services (CPU mode)
 	@echo "$(BLUE)Starting Ollama Agents (CPU mode)...$(NC)"
-	docker compose up -d
+	docker compose $(COMPOSE_FILES) up -d
 	@echo "$(GREEN)✓ Services started$(NC)"
 	@make status
 
 up-gpu: ## Start all services with GPU support
 	@echo "$(BLUE)Starting Ollama Agents (GPU mode)...$(NC)"
 	@echo "$(YELLOW)Note: Requires NVIDIA GPU and nvidia-docker runtime$(NC)"
-	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+	docker compose $(COMPOSE_FILES_GPU) up -d
 	@echo "$(GREEN)✓ Services started with GPU$(NC)"
 	@make status
 
 down: ## Stop all services
 	@echo "$(BLUE)Stopping Ollama Agents...$(NC)"
-	docker compose down
+	docker compose $(COMPOSE_FILES) down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
 
 restart: ## Restart all services
 	@echo "$(BLUE)Restarting Ollama Agents...$(NC)"
-	docker compose restart
+	docker compose $(COMPOSE_FILES) restart
 	@echo "$(GREEN)✓ Services restarted$(NC)"
 
 restart-gpu: ## Restart all services with GPU
 	@echo "$(BLUE)Restarting Ollama Agents (GPU mode)...$(NC)"
-	docker compose -f docker-compose.yml -f docker-compose.gpu.yml restart
+	docker compose $(COMPOSE_FILES_GPU) restart
 	@echo "$(GREEN)✓ Services restarted with GPU$(NC)"
 
 build: ## Build/rebuild all services
 	@echo "$(BLUE)Building services...$(NC)"
-	docker compose build --no-cache
+	docker compose $(COMPOSE_FILES) build --no-cache
 	@echo "$(GREEN)✓ Build complete$(NC)"
 
 rebuild: down build up ## Full rebuild: stop, build, start (CPU)
@@ -187,28 +197,46 @@ rebuild-gpu: down build up-gpu ## Full rebuild with GPU: stop, build, start
 # ============================================================================
 logs: ## Show logs (use: make logs agent=<name>)
 	@if [ -z "$(agent)" ]; then \
-		docker compose logs -f; \
+		docker compose $(COMPOSE_FILES) logs -f; \
 	else \
-		docker compose logs -f $(agent); \
+		docker compose $(COMPOSE_FILES) logs -f $(agent); \
 	fi
 
 logs-ollama: ## Show Ollama service logs
-	docker compose logs -f ollama
+	docker compose $(COMPOSE_FILES) logs -f ollama
 
 ps: ## Show running containers
 	@echo "$(BLUE)Running Services:$(NC)"
-	@docker compose ps
+	@docker compose $(COMPOSE_FILES) ps
 
 status: ## Show health status of all services
 	@echo "$(BLUE)Service Health Status:$(NC)"
-	@docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+	@docker compose $(COMPOSE_FILES) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+show-compose-files: ## Show all compose files being used
+	@echo "$(BLUE)Active Compose Files:$(NC)"
+	@echo "  - docker-compose.yml (main)"
+	@if [ -n "$(AGENT_COMPOSE_FILES)" ]; then \
+		for file in $(AGENT_COMPOSE_FILES); do \
+			echo "  - $$file (agent)"; \
+		done; \
+	else \
+		echo "  $(YELLOW)No agent compose files found in docker-compose.agents/$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)GPU Compose File:$(NC)"
+	@if [ -f docker-compose.gpu.yml ]; then \
+		echo "  - docker-compose.gpu.yml (available, use 'make up-gpu')"; \
+	else \
+		echo "  $(YELLOW)docker-compose.gpu.yml not found$(NC)"; \
+	fi
 
 # ============================================================================
 # Ollama Model Management
 # ============================================================================
 pull-models: ## Pull Ollama models specified in .env
 	@echo "$(BLUE)Pulling Ollama models...$(NC)"
-	docker compose exec ollama ollama pull llama3.2
+	docker compose $(COMPOSE_FILES) exec ollama ollama pull llama3.2
 	@echo "$(GREEN)✓ Models pulled$(NC)"
 
 pull-model: ## Pull specific model (use: make pull-model model=<name>)
@@ -218,12 +246,12 @@ pull-model: ## Pull specific model (use: make pull-model model=<name>)
 		exit 1; \
 	fi
 	@echo "$(BLUE)Pulling model: $(model)$(NC)"
-	docker compose exec ollama ollama pull $(model)
+	docker compose $(COMPOSE_FILES) exec ollama ollama pull $(model)
 	@echo "$(GREEN)✓ Model $(model) pulled$(NC)"
 
 list-models: ## List available Ollama models
 	@echo "$(BLUE)Available Models:$(NC)"
-	docker compose exec ollama ollama list
+	docker compose $(COMPOSE_FILES) exec ollama ollama list
 
 # ============================================================================
 # Agent Testing
@@ -360,9 +388,9 @@ run-raw-json: ## Run agent and return extracted result as JSON (use: make run-ra
 health: ## Check health of all agents
 	@echo "$(BLUE)Checking Agent Health:$(NC)"
 	@echo ""
-	@for service in $$(docker compose ps --format json | jq -r 'select(.Name | contains("agent-")) | .Service'); do \
+	@for service in $$(docker compose $(COMPOSE_FILES) ps --format json | jq -r 'select(.Name | contains("agent-")) | .Service'); do \
 		echo "$(YELLOW)$$service:$(NC)"; \
-		port=$$(docker compose port $$service 8000 2>/dev/null | cut -d':' -f2); \
+		port=$$(docker compose $(COMPOSE_FILES) port $$service 8000 2>/dev/null | cut -d':' -f2); \
 		if [ -n "$$port" ]; then \
 			curl -s http://localhost:$$port/health | jq -r '"  Status: " + .status + " | Model: " + .model' 2>/dev/null || \
 				echo "  $(RED)Unreachable$(NC)"; \
@@ -460,7 +488,7 @@ clean: ## Remove all containers, volumes, and networks
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker compose down -v; \
+		docker compose $(COMPOSE_FILES) down -v; \
 		echo "$(GREEN)✓ Cleanup complete$(NC)"; \
 	else \
 		echo "$(BLUE)Cancelled$(NC)"; \
@@ -475,17 +503,17 @@ prune: ## Prune unused Docker resources
 # Development
 # ============================================================================
 shell-ollama: ## Open shell in Ollama container
-	docker compose exec ollama bash
+	docker compose $(COMPOSE_FILES) exec ollama bash
 
 shell-agent: ## Open shell in agent container (use: make shell-agent agent=<name>)
 	@if [ -z "$(agent)" ]; then \
 		echo "$(RED)Error: agent parameter required$(NC)"; \
 		exit 1; \
 	fi
-	docker compose exec $(agent) bash
+	docker compose $(COMPOSE_FILES) exec $(agent) bash
 
 dev-watch: ## Watch logs of all services
-	docker compose logs -f --tail=50
+	docker compose $(COMPOSE_FILES) logs -f --tail=50
 
 # ============================================================================
 # Quick Actions
