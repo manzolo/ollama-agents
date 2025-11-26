@@ -107,7 +107,7 @@ ollama-agents/
 ├── docker-compose.yml          # Main orchestration (GPU-enabled)
 ├── .env                        # Environment configuration
 ├── Makefile                    # 30+ convenience commands
-├── README.md                   # Full documentation (1000+ lines)
+├── ../README.md                  # Full documentation (1000+ lines)
 ├── QUICKSTART.md               # Quick reference
 ├── BACKOFFICE-GUIDE.md         # Complete backoffice guide
 ├── test-agent.sh               # Test script
@@ -390,7 +390,7 @@ SWARM_CONVERTER_MAX_TOKENS=8192
 
 ## Documentation
 
-- `README.md` - Complete guide (350+ lines)
+- `../README.md` - Complete guide (350+ lines)
 - `QUICKSTART.md` - Quick reference
 - `SUMMARY.md` - This file
 - Inline code comments

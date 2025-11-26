@@ -190,4 +190,4 @@ converted = await call_agent("http://agent-swarm-converter:8000", input_data)
 validation = await call_agent("http://agent-validator:8000", converted)
 ```
 
-For detailed examples, see [INTER-AGENT-COMMUNICATION.md](../INTER-AGENT-COMMUNICATION.md).
+For detailed examples, see [INTER-AGENT-COMMUNICATION.md](INTER-AGENT-COMMUNICATION.md).

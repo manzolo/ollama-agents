@@ -208,7 +208,7 @@ make up
 
 **Solutions:**
 
-See [GPU-SETUP.md](../GPU-SETUP.md) for complete GPU troubleshooting.
+See [GPU-SETUP.md](GPU-SETUP.md) for complete GPU troubleshooting.
 
 ```bash
 # Verify GPU is available

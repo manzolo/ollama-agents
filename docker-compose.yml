@@ -66,6 +66,11 @@ services:
       # Development mode: Uncomment to enable live code reloading
       # - ./backoffice/backend:/app:ro
       # - ./backoffice/frontend:/app/frontend:ro
+      # Load environment variables from multiple files
+      # .env is loaded automatically by docker-compose
+      # .env.agents contains dynamic agent configurations
+    env_file:
+      - .env.agents
     networks:
       - agent-network
     environment:
@@ -75,7 +80,7 @@ services:
       - COMPOSE_DIR=${COMPOSE_DIR}
       - EXAMPLES_DIR=${EXAMPLES_DIR}
       - PROJECT_ROOT=${PROJECT_ROOT}
-      - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT}
+      - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-$PWD}
       - SWARM_CONVERTER_URL=${SWARM_CONVERTER_URL}
       - SWARM_VALIDATOR_URL=${SWARM_VALIDATOR_URL}
       - OLLAMA_HOST=http://ollama:11434

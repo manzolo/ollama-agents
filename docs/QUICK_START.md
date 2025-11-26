@@ -6,7 +6,7 @@ Get up and running with Ollama Agents in minutes.
 
 - Docker and Docker Compose
 - At least 8GB RAM (16GB+ recommended)
-- (Optional) NVIDIA GPU with Docker GPU support - see [GPU-SETUP.md](../GPU-SETUP.md)
+- (Optional) NVIDIA GPU with Docker GPU support - see [GPU-SETUP.md](GPU-SETUP.md)
 
 ## Installation
 

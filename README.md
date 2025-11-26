@@ -96,9 +96,9 @@ For detailed instructions, see **[Quick Start Guide](docs/QUICK_START.md)**.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ### Additional Resources
-- **[Backoffice Guide](BACKOFFICE-GUIDE.md)** - Detailed backoffice features
-- **[GPU Setup](GPU-SETUP.md)** - NVIDIA GPU configuration
-- **[Inter-Agent Communication](INTER-AGENT-COMMUNICATION.md)** - Agent-to-agent patterns
+- **[Backoffice Guide](docs/BACKOFFICE-GUIDE.md)** - Detailed backoffice features
+- **[GPU Setup](docs/GPU-SETUP.md)** - NVIDIA GPU configuration
+- **[Inter-Agent Communication](docs/INTER-AGENT-COMMUNICATION.md)** - Agent-to-agent patterns
 
 ## Project Structure
 

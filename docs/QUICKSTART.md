@@ -264,7 +264,7 @@ EOF
 2. **Explore** the backoffice UI at http://localhost:8080
 3. **Create** custom workflows for your use cases
 4. **Add** your own specialized agents
-5. **Read** the full [README.md](README.md) for advanced topics
+5. **Read** the full [README.md](../README.md) for advanced topics
 
 ## Tips
 

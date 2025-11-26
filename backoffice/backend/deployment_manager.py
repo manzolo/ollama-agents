@@ -27,7 +27,12 @@ class DeploymentManager:
         # Directory for individual agent compose files (runtime, git-ignored)
         self.agents_compose_dir = self.project_root / "runtime" / "compose"
         self.agents_compose_dir.mkdir(parents=True, exist_ok=True)
+        # Separate env files: base (git-tracked) and agents (git-ignored)
         self.env_path = self.project_root / ".env"
+        self.env_agents_path = self.project_root / ".env.agents"
+        # Ensure .env.agents exists
+        if not self.env_agents_path.exists():
+            self.env_agents_path.write_text("# Auto-managed agent configurations\n\n")
         # Runtime agents directory (user-created, git-ignored)
         self.agents_dir = self.project_root / "runtime" / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)
@@ -244,7 +249,8 @@ networks:
 
     def update_env_file(self, agent_definition: Dict[str, Any]) -> bool:
         """
-        Update .env file with agent environment variables.
+        Update .env.agents file with agent environment variables.
+        Uses separate .env.agents file to avoid modifying git-tracked .env.
 
         Args:
             agent_definition: Agent configuration
@@ -261,18 +267,18 @@ networks:
 
             env_prefix = agent_name.upper().replace("-", "_")
 
-            # Read current .env
+            # Read current .env.agents
             env_content = ""
-            if self.env_path.exists():
-                with open(self.env_path, "r") as f:
+            if self.env_agents_path.exists():
+                with open(self.env_agents_path, "r") as f:
                     env_content = f.read()
 
             # Check if already exists
             if f"{env_prefix}_PORT" in env_content:
-                print(f"Agent {agent_name} already in .env")
+                print(f"Agent {agent_name} already in .env.agents")
                 return True
 
-            # Append new variables
+            # Append new variables to .env.agents (not .env!)
             new_env = f"\n# ----------------------------------------------------------------------------\n"
             new_env += f"# {agent_name.title().replace('-', ' ')} Agent Configuration\n"
             new_env += f"# ----------------------------------------------------------------------------\n"
@@ -281,13 +287,13 @@ networks:
             new_env += f"{env_prefix}_TEMPERATURE={temperature}\n"
             new_env += f"{env_prefix}_MAX_TOKENS={max_tokens}\n"
 
-            with open(self.env_path, "a") as f:
+            with open(self.env_agents_path, "a") as f:
                 f.write(new_env)
 
             return True
 
         except Exception as e:
-            print(f"Error updating .env: {e}")
+            print(f"Error updating .env.agents: {e}")
             return False
 
     def deploy_agent(self, agent_name: str, agent_definition: Dict[str, Any]) -> Dict[str, Any]:
@@ -576,11 +582,11 @@ networks:
                 result["errors"].append(f"Failed to remove compose file: {str(e)}")
                 result["steps"][-1]["status"] = "failed"
 
-            # Step 3: Remove from .env (same logic as before)
+            # Step 3: Remove from .env.agents (not .env!)
             result["steps"].append({"step": "remove_from_env", "status": "running"})
             try:
-                if self.env_path.exists():
-                    with open(self.env_path, "r") as f:
+                if self.env_agents_path.exists():
+                    with open(self.env_agents_path, "r") as f:
                         content = f.read()
                     env_prefix = agent_name.upper().replace("-", "_")
                     lines = content.split('\n')
@@ -596,11 +602,11 @@ networks:
                             else:
                                 skip_section = False
                         new_lines.append(line)
-                    with open(self.env_path, "w") as f:
+                    with open(self.env_agents_path, "w") as f:
                         f.write('\n'.join(new_lines))
                 result["steps"][-1]["status"] = "completed"
             except Exception as e:
-                result["errors"].append(f".env update failed: {str(e)}")
+                result["errors"].append(f".env.agents update failed: {str(e)}")
                 result["steps"][-1]["status"] = "failed"
 
             # Step 4: Optionally delete agent files on disk

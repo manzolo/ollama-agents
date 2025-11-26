@@ -43,6 +43,7 @@ shared/context/**/*.json
 # Environment
 .env.local
 .env.*.local
+.env.agents
 
 # Logs
 *.log
