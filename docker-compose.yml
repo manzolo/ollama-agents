@@ -79,8 +79,8 @@ services:
       # Agent URLs (for workflow orchestration)
       - SWARM_CONVERTER_URL=${SWARM_CONVERTER_URL}
       - SWARM_VALIDATOR_URL=${SWARM_VALIDATOR_URL}
-      # Ollama connection
-      - OLLAMA_HOST=http://ollama:11434
+      # Ollama connection (configurable - can use external host)
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s

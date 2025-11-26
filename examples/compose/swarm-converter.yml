@@ -23,7 +23,7 @@ services:
       - agent-network
     environment:
       - AGENT_NAME=swarm-converter
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - MODEL_NAME=${SWARM_CONVERTER_MODEL:-llama3.2}
       - TEMPERATURE=${SWARM_CONVERTER_TEMPERATURE:-0.7}
       - MAX_TOKENS=${SWARM_CONVERTER_MAX_TOKENS:-4096}

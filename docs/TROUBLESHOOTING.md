@@ -49,6 +49,46 @@ make list-models
 docker compose exec ollama ollama list
 ```
 
+### Using External Ollama Host
+
+You can configure the system to use an external Ollama instance instead of the built-in Docker service.
+
+**Configuration:**
+
+Edit `.env` and set `OLLAMA_HOST`:
+
+```bash
+# Use Ollama running on host machine
+OLLAMA_HOST=http://host.docker.internal:11434
+
+# Use external Ollama server
+OLLAMA_HOST=http://192.168.1.100:11434
+
+# Use remote Ollama API
+OLLAMA_HOST=https://your-ollama-api.com
+```
+
+**Restart services to apply:**
+
+```bash
+make restart
+```
+
+**Verify connection:**
+
+```bash
+# Test from backoffice container
+docker compose exec backoffice curl -s ${OLLAMA_HOST}/api/version
+
+# Check agent logs to verify they're connecting
+make logs agent=swarm-converter
+```
+
+**Notes:**
+- When using external Ollama, ensure the host is accessible from Docker containers
+- You can disable/remove the local `ollama` service from `docker-compose.yml` if not needed
+- All agents will automatically use the configured `OLLAMA_HOST`
+
 ## Agent Issues
 
 ### Agent Not Starting

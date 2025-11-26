@@ -149,13 +149,10 @@ services:
       - agent-network
     environment:
       - AGENT_NAME={agent_name}
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${{OLLAMA_HOST:-http://ollama:11434}}
       - MODEL_NAME=${{{env_prefix}_MODEL:-{model}}}
       - TEMPERATURE=${{{env_prefix}_TEMPERATURE:-{temperature}}}
       - MAX_TOKENS=${{{env_prefix}_MAX_TOKENS:-{max_tokens}}}
-    depends_on:
-      ollama:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s

@@ -23,7 +23,7 @@ services:
       - agent-network
     environment:
       - AGENT_NAME=swarm-validator
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - MODEL_NAME=${SWARM_VALIDATOR_MODEL:-llama3.2}
       - TEMPERATURE=${SWARM_VALIDATOR_TEMPERATURE:-0.1}
       - MAX_TOKENS=${SWARM_VALIDATOR_MAX_TOKENS:-4096}
