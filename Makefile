@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart build logs ps pull-models test-agent clean health status init init-gpu show-compose-files create-network remove-network
+.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -35,9 +35,12 @@ remove-network:
 # -----------------------------
 # Dynamic Agent Compose Files
 # -----------------------------
-AGENT_COMPOSE_FILES := $(wildcard docker-compose.agents/*.yml)
-COMPOSE_FILES       := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
-COMPOSE_FILES_GPU   := $(COMPOSE_FILES) -f docker-compose.gpu.yml
+# Include both example agents and runtime agents
+EXAMPLE_COMPOSE_FILES := $(wildcard docker-compose.agents/*.yml)
+RUNTIME_COMPOSE_FILES := $(wildcard runtime/compose/*.yml)
+AGENT_COMPOSE_FILES   := $(EXAMPLE_COMPOSE_FILES) $(RUNTIME_COMPOSE_FILES)
+COMPOSE_FILES         := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
+COMPOSE_FILES_GPU     := $(COMPOSE_FILES) -f docker-compose.gpu.yml
 
 # ============================================================================
 # Help
@@ -61,15 +64,18 @@ help: ## Show this help message
 	@echo " $(GREEN)health$(NC)        Check agent health"
 	@echo ""
 	@echo "$(YELLOW)AGENT OPERATIONS$(NC)"
-	@echo " $(GREEN)run agent=X file=Y$(NC)           Run agent with file"
-	@echo " $(GREEN)test-agent agent=X$(NC)           Test single agent"
-	@echo " $(GREEN)logs [agent=X]$(NC)                View logs"
+	@echo " $(GREEN)list-agents$(NC)                   List all agents"
+	@echo " $(GREEN)test-agent agent=X$(NC)            Test agent health & info"
+	@echo " $(GREEN)logs [agent=X] [follow=true]$(NC)  View logs"
+	@echo " $(GREEN)logs-ollama$(NC)                   View Ollama logs"
+	@echo " $(GREEN)logs-backoffice$(NC)               View Backoffice logs"
+	@echo " $(GREEN)shell-agent agent=X$(NC)           Enter agent shell"
 	@echo " $(GREEN)docs agent=X$(NC)                  Open Swagger UI"
 	@echo ""
 	@echo "$(YELLOW)MODELS & DEV$(NC)"
-	@echo " $(GREEN)pull-models$(NC)     Pull default models"
-	@echo " $(GREEN)build$(NC)           Build services"
-	@echo " $(GREEN)shell-agent agent=X$(NC)           Enter agent container"
+	@echo " $(GREEN)pull-models$(NC)                   Pull default models"
+	@echo " $(GREEN)build$(NC)                         Build services"
+	@echo " $(GREEN)show-compose-files$(NC)            Show compose files"
 	@echo ""
 	@echo "$(YELLOW)CLEANUP$(NC)"
 	@echo " $(GREEN)clean$(NC)           Remove everything (data + network)"
@@ -197,18 +203,129 @@ status: ## Show running services
 	@echo "$(BLUE)Service Status:$(NC)"
 	@docker compose $(COMPOSE_FILES) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
-health: ## Check health of all agents
-	@echo "$(BLUE)Agent Health Check:$(NC)"
-	@for svc in $$(docker compose $(COMPOSE_FILES) ps --services | grep agent-); do \
-		echo "$(YELLOW)$$svc$(NC)"; \
-		port=$$(docker compose $(COMPOSE_FILES) port $$svc 8000 2>/dev/null | cut -d: -f2); \
-		if [ -n "$$port" ]; then \
-			curl -s http://localhost:$$port/health | grep -q '"status":"healthy"' && \
-				echo " $(GREEN)Healthy$(NC)" || echo " $(RED)Unhealthy$(NC)"; \
+health: ## Check health of all services
+	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║                    System Health Check                       ║$(NC)"
+	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Core Services:$(NC)"
+	@printf "  %-25s" "ollama"; \
+		docker inspect ollama-engine --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy && \
+			echo "$(GREEN)✓ healthy$(NC)" || echo "$(RED)✗ unhealthy$(NC)"
+	@printf "  %-25s" "backoffice"; \
+		docker inspect backoffice --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy && \
+			echo "$(GREEN)✓ healthy$(NC)" || echo "$(RED)✗ unhealthy$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Agents:$(NC)"
+	@agent_count=0; \
+	for container in $$(docker ps --filter "name=agent-" --format "{{.Names}}" 2>/dev/null); do \
+		agent_count=$$((agent_count + 1)); \
+		printf "  %-25s" "$$container"; \
+		health=$$(docker inspect $$container --format='{{.State.Health.Status}}' 2>/dev/null); \
+		if [ "$$health" = "healthy" ]; then \
+			echo "$(GREEN)✓ healthy$(NC)"; \
+		elif [ "$$health" = "starting" ]; then \
+			echo "$(YELLOW)⏳ starting$(NC)"; \
 		else \
-			echo " $(RED)Not running$(NC)"; \
+			echo "$(RED)✗ unhealthy$(NC)"; \
 		fi; \
+	done; \
+	if [ $$agent_count -eq 0 ]; then \
+		echo "  $(YELLOW)No agents running$(NC)"; \
+	fi
+	@echo ""
+
+# ============================================================================
+# Agent Operations
+# ============================================================================
+list-agents: ## List all available agents
+	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║                    Available Agents                          ║$(NC)"
+	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Running Agents:$(NC)"
+	@for container in $$(docker ps --filter "name=agent-" --format "{{.Names}}" 2>/dev/null); do \
+		agent_name=$$(echo $$container | sed 's/agent-//'); \
+		port=$$(docker port $$container 8000 2>/dev/null | cut -d: -f2); \
+		printf "  $(GREEN)✓$(NC) %-20s http://localhost:$$port\n" "$$agent_name"; \
 	done
+	@echo ""
+	@echo "$(YELLOW)Available Compose Files:$(NC)"
+	@for file in $(AGENT_COMPOSE_FILES); do \
+		agent=$$(basename $$file .yml); \
+		printf "  $(BLUE)•$(NC) $$agent\n"; \
+	done
+	@echo ""
+
+logs: ## View logs (usage: make logs [agent=NAME] [follow=true])
+ifndef agent
+	@echo "$(BLUE)Showing logs for all services...$(NC)"
+	@docker compose $(COMPOSE_FILES) logs $(if $(filter true,$(follow)),-f,--tail=100)
+else
+	@echo "$(BLUE)Showing logs for agent-$(agent)...$(NC)"
+	@docker logs $(if $(filter true,$(follow)),-f,--tail=100) agent-$(agent)
+endif
+
+logs-ollama: ## View Ollama logs
+	@echo "$(BLUE)Ollama Logs:$(NC)"
+	@docker logs --tail=100 ollama-engine
+
+logs-backoffice: ## View Backoffice logs
+	@echo "$(BLUE)Backoffice Logs:$(NC)"
+	@docker logs --tail=100 backoffice
+
+test-agent: ## Test an agent (usage: make test-agent agent=NAME)
+ifndef agent
+	@echo "$(RED)Error: agent parameter required$(NC)"
+	@echo "Usage: make test-agent agent=swarm-converter"
+	@exit 1
+endif
+	@echo "$(BLUE)Testing agent: $(agent)$(NC)"
+	@port=$$(docker port agent-$(agent) 8000 2>/dev/null | cut -d: -f2); \
+	if [ -z "$$port" ]; then \
+		echo "$(RED)Error: Agent not running or port not found$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(YELLOW)Checking health...$(NC)"; \
+	curl -s http://localhost:$$port/health | jq . || echo "$(RED)Health check failed$(NC)"; \
+	echo ""; \
+	echo "$(YELLOW)Agent info:$(NC)"; \
+	curl -s http://localhost:$$port/ | jq . || echo "$(RED)Info request failed$(NC)"
+
+shell-agent: ## Enter agent container (usage: make shell-agent agent=NAME)
+ifndef agent
+	@echo "$(RED)Error: agent parameter required$(NC)"
+	@echo "Usage: make shell-agent agent=swarm-converter"
+	@exit 1
+endif
+	@echo "$(BLUE)Opening shell in agent-$(agent)...$(NC)"
+	@docker exec -it agent-$(agent) /bin/sh
+
+docs: ## Open Swagger docs for agent (usage: make docs agent=NAME)
+ifndef agent
+	@echo "$(RED)Error: agent parameter required$(NC)"
+	@echo "Usage: make docs agent=swarm-converter"
+	@exit 1
+endif
+	@port=$$(docker port agent-$(agent) 8000 2>/dev/null | cut -d: -f2); \
+	if [ -z "$$port" ]; then \
+		echo "$(RED)Error: Agent not running or port not found$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)Opening Swagger UI at http://localhost:$$port/docs$(NC)"; \
+	xdg-open http://localhost:$$port/docs 2>/dev/null || \
+		open http://localhost:$$port/docs 2>/dev/null || \
+		start http://localhost:$$port/docs 2>/dev/null || \
+		echo "Please open: http://localhost:$$port/docs"
+
+show-compose-files: ## Show which compose files are being used
+	@echo "$(BLUE)Active Compose Files:$(NC)"
+	@echo "  $(GREEN)•$(NC) docker-compose.yml (main)"
+	@for file in $(AGENT_COMPOSE_FILES); do \
+		echo "  $(GREEN)•$(NC) $$file"; \
+	done
+	@echo ""
+	@echo "$(YELLOW)Total: $$(echo $(COMPOSE_FILES) | wc -w) files$(NC)"
 
 # ============================================================================
 # Cleanup
