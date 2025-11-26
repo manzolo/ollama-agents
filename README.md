@@ -91,6 +91,7 @@ For detailed instructions, see **[Quick Start Guide](docs/QUICK_START.md)**.
 ### Core Documentation
 - **[Quick Start Guide](docs/QUICK_START.md)** - Get up and running in minutes
 - **[Agent Documentation](docs/AGENTS.md)** - Create and configure agents
+- **[Plugin System](docs/PLUGINS.md)** - Plugin architecture and development
 - **[Workflow Guide](docs/WORKFLOWS.md)** - Multi-agent workflow orchestration
 - **[API Reference](docs/API_REFERENCE.md)** - Complete API documentation
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
