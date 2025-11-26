@@ -20,6 +20,9 @@ class DeploymentManager:
 
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root)
+        # Get host filesystem path for Docker mounts
+        import os
+        self.host_project_root = Path(os.getenv("HOST_PROJECT_ROOT", str(project_root)))
         self.docker_compose_path = self.project_root / "docker-compose.yml"
         # Directory for individual agent compose files (runtime, git-ignored)
         self.agents_compose_dir = self.project_root / "runtime" / "compose"
@@ -87,6 +90,11 @@ class DeploymentManager:
         env_prefix = agent_name.upper().replace("-", "_")
 
         # Create a complete, standalone compose file
+        # Use host filesystem paths for volume mounts (required when running docker-compose via socket)
+        # But use relative path for build context (relative to where docker-compose runs)
+        host_runtime_agents = self.host_project_root / "runtime" / "agents" / agent_name
+        host_shared_context = self.host_project_root / "shared" / "context" / agent_name
+
         compose_content = f'''# ==========================================================================
 # AGENT: {agent_name.upper()}
 # ==========================================================================
@@ -105,9 +113,9 @@ services:
     ports:
       - "${{{env_prefix}_PORT:-{port}}}:8000"
     volumes:
-      - ./runtime/agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
-      - ./runtime/agents/{agent_name}/config.yml:/app/config.yml:ro
-      - ./shared/context/{agent_name}:/app/context
+      - {host_runtime_agents}/prompt.txt:/app/prompt.txt:ro
+      - {host_runtime_agents}/config.yml:/app/config.yml:ro
+      - {host_shared_context}:/app/context
     networks:
       - agent-network
     environment:
