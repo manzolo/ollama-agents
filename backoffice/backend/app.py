@@ -30,7 +30,9 @@ from deployment_manager import DeploymentManager
 # ============================================================================
 WORKFLOWS_DIR = Path(os.getenv("WORKFLOWS_DIR", "/app/workflows"))
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "/app/frontend"))
-AGENT_DEFINITIONS_DIR = Path(os.getenv("AGENT_DEFINITIONS_DIR", "/app/agent-definitions"))
+AGENT_DEFINITIONS_DIR = Path(os.getenv("AGENT_DEFINITIONS_DIR", "/app/runtime/agent-definitions"))
+COMPOSE_DIR = Path(os.getenv("COMPOSE_DIR", "/app/runtime/compose"))
+EXAMPLES_DIR = Path(os.getenv("EXAMPLES_DIR", "/app/examples"))
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "/project"))
 
 # Agent Registry - Maps agent names to their internal URLs
@@ -807,11 +809,14 @@ async def startup_event():
     print(f"Starting Backoffice API...")
     print(f"Workflows directory: {WORKFLOWS_DIR}")
     print(f"Agent definitions directory: {AGENT_DEFINITIONS_DIR}")
+    print(f"Compose directory: {COMPOSE_DIR}")
+    print(f"Examples directory: {EXAMPLES_DIR}")
     print(f"Registered agents: {list(AGENT_REGISTRY.keys())}")
 
     # Ensure directories exist
     WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
     AGENT_DEFINITIONS_DIR.mkdir(parents=True, exist_ok=True)
+    COMPOSE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.on_event("shutdown")

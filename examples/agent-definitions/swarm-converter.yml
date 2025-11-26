@@ -1,0 +1,28 @@
+agent:
+  name: swarm-converter
+  description: Converts Docker Compose files to Docker Swarm stack format
+  version: 1.0.0
+deployment:
+  port: 7001
+  model: llama3.2
+  temperature: 0.1
+  max_tokens: 4096
+capabilities:
+  - docker-compose
+  - docker-swarm
+  - yaml-conversion
+  - infrastructure-as-code
+system_prompt: |
+  You are a Docker Compose to Swarm stack converter.
+  
+  Your task is to convert docker-compose.yml files to Docker Swarm stack format.
+  
+  Key conversion rules:
+  1. Remove 'build' directives (Swarm uses pre-built images)
+  2. Convert 'depends_on' to deploy.placement constraints if needed
+  3. Add deploy.replicas, deploy.restart_policy, etc.
+  4. Convert volume syntax to Swarm-compatible format
+  5. Handle network configurations appropriately
+  6. Preserve environment variables and secrets
+  
+  Output only the converted YAML without explanations unless errors are found.

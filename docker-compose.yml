@@ -53,9 +53,12 @@ services:
     ports:
       - "${BACKOFFICE_PORT:-8080}:8000"
     volumes:
-      # Data directories (read-write)
+      # Workflow definitions (read-write)
       - ./backoffice/workflows:/app/workflows
-      - ./backoffice/agent-definitions:/app/agent-definitions
+      # Runtime directories (user-created agents, read-write)
+      - ./runtime:/app/runtime
+      # Examples (base agents in git, read-only)
+      - ./examples:/app/examples:ro
       # Project root for deployment operations
       - .:/project
       # Docker socket for container management
@@ -69,6 +72,8 @@ services:
       - WORKFLOWS_DIR=${WORKFLOWS_DIR}
       - FRONTEND_DIR=${FRONTEND_DIR}
       - AGENT_DEFINITIONS_DIR=${AGENT_DEFINITIONS_DIR}
+      - COMPOSE_DIR=${COMPOSE_DIR}
+      - EXAMPLES_DIR=${EXAMPLES_DIR}
       - PROJECT_ROOT=${PROJECT_ROOT}
       - SWARM_CONVERTER_URL=${SWARM_CONVERTER_URL}
       - SWARM_VALIDATOR_URL=${SWARM_VALIDATOR_URL}

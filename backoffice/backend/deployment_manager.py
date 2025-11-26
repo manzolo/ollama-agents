@@ -21,11 +21,13 @@ class DeploymentManager:
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root)
         self.docker_compose_path = self.project_root / "docker-compose.yml"
-        # Directory for individual agent compose files (git-ignored)
-        self.agents_compose_dir = self.project_root / "docker-compose.agents"
+        # Directory for individual agent compose files (runtime, git-ignored)
+        self.agents_compose_dir = self.project_root / "runtime" / "compose"
         self.agents_compose_dir.mkdir(parents=True, exist_ok=True)
         self.env_path = self.project_root / ".env"
-        self.agents_dir = self.project_root / "agents"
+        # Runtime agents directory (user-created, git-ignored)
+        self.agents_dir = self.project_root / "runtime" / "agents"
+        self.agents_dir.mkdir(parents=True, exist_ok=True)
         self.shared_dir = self.project_root / "shared"
 
         # Initialize Docker client

@@ -1,0 +1,34 @@
+# Swarm Converter Agent Configuration
+
+agent:
+  name: swarm-converter
+  description: Converts Docker Compose files to Docker Swarm stack files
+  version: 1.0.0
+
+capabilities:
+  - docker-compose-parsing
+  - docker-swarm-conversion
+  - yaml-validation
+  - deployment-recommendations
+
+# Model-specific options
+options:
+  temperature: 0.3  # Lower temperature for more consistent, technical output
+  num_predict: 8192  # Higher token limit for complex YAML files
+  top_k: 40
+  top_p: 0.9
+  repeat_penalty: 1.1
+
+# Processing preferences
+preferences:
+  preserve_comments: true
+  add_conversion_notes: true
+  validate_syntax: true
+  suggest_best_practices: true
+
+# Swarm-specific settings
+swarm:
+  default_replicas: 1
+  default_update_parallelism: 1
+  default_update_delay: 10s
+  prefer_overlay_networks: true
