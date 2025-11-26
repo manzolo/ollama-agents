@@ -242,6 +242,14 @@ async def discover_runtime_agents() -> Dict[str, Any]:
                             # Container is running but not responsive yet
                             agent_info["status"] = "starting"
                     
+                    # Get source information from plugin registry
+                    plugin = plugin_registry.get(agent_name)
+                    if plugin:
+                        agent_info["source"] = plugin.get("source", "runtime")
+                    else:
+                        # If not in plugin registry, assume runtime
+                        agent_info["source"] = "runtime"
+
                     discovered_agents[agent_name] = agent_info
 
                 except Exception as e:
@@ -258,10 +266,16 @@ async def discover_runtime_agents() -> Dict[str, Any]:
         original_agents = await orchestrator.discover_agents()
         for name, info in original_agents.items():
             if name not in discovered_agents:
+                # Get source from plugin registry
+                plugin = plugin_registry.get(name)
+                if plugin:
+                    info["source"] = plugin.get("source", "runtime")
+                else:
+                    info["source"] = "runtime"
                 discovered_agents[name] = info
     except Exception as e:
         print(f"Error in original discovery: {e}")
-        
+
     return discovered_agents
 
 

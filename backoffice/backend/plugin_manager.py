@@ -183,7 +183,7 @@ class PluginRegistry:
         except Exception as e:
             logger.warning(f"Could not connect to Docker: {e}")
 
-    def register(self, plugin_id: str, url: str, manifest: Optional[PluginManifest] = None):
+    def register(self, plugin_id: str, url: str, manifest: Optional[PluginManifest] = None, source: str = "runtime"):
         """Register a plugin manually"""
         self.plugins[plugin_id] = {
             "id": plugin_id,
@@ -191,8 +191,9 @@ class PluginRegistry:
             "manifest": manifest.to_dict() if manifest else None,
             "registered_at": datetime.utcnow().isoformat(),
             "status": "registered",
+            "source": source,  # "example", "runtime", or "docker"
         }
-        logger.info(f"Registered plugin: {plugin_id} at {url}")
+        logger.info(f"Registered plugin: {plugin_id} at {url} (source: {source})")
 
     def unregister(self, plugin_id: str):
         """Unregister a plugin"""
@@ -253,7 +254,7 @@ class PluginRegistry:
             agent_name = manifest.id
             url = f"http://agent-{agent_name}:8000"
 
-            self.register(agent_name, url, manifest)
+            self.register(agent_name, url, manifest, source=source)
             count += 1
 
         return count
@@ -292,7 +293,7 @@ class PluginRegistry:
                     if agent_name not in self.plugins:
                         # Use internal network URL for service-to-service communication
                         internal_url = f"http://{container_name}:8000"
-                        self.register(agent_name, internal_url)
+                        self.register(agent_name, internal_url, source="docker")
                         discovered += 1
                         logger.info(f"Discovered running agent from Docker: {agent_name}")
 

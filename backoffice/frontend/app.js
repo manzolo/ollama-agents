@@ -421,11 +421,13 @@ const app = {
         const agentsHTML = Object.entries(this.state.agents).map(([name, agent]) => {
             const statusClass = agent.status === 'healthy' ? 'healthy' : 'unavailable';
             const cardClass = `status-${agent.status}`;
+            const isExample = agent.source === 'example';
+            const sourceLabel = isExample ? '<span class="source-badge source-example" title="Example agent (read-only)">📚 Example</span>' : '';
 
             return `
                 <div class="card agent-card ${cardClass}">
                     <div class="agent-header">
-                        <div class="agent-name">${name}</div>
+                        <div class="agent-name">${name} ${sourceLabel}</div>
                         <span class="status-badge ${statusClass}">${agent.status}</span>
                     </div>
                     <p><strong>Model:</strong> ${agent.model || 'N/A'}</p>
@@ -441,12 +443,12 @@ const app = {
                             <button onclick="app.testAgent('${name}')" class="btn btn-small btn-primary">Test</button>
                             <button onclick="app.restartAgent('${name}')" class="btn btn-small btn-secondary">🔄 Restart</button>
                             <button onclick="app.stopAgent('${name}')" class="btn btn-small btn-secondary">⏹ Stop</button>
-                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger">🗑 Delete</button>
+                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
                         </div>
                     ` : agent.status === 'stopped' ? `
                         <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="app.startAgent('${name}')" class="btn btn-small btn-success">▶ Start</button>
-                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger">🗑 Delete</button>
+                            <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
                         </div>
                     ` : agent.status === 'starting' ? `
                         <div style="margin-top: 15px;">
@@ -786,11 +788,15 @@ const app = {
             return;
         }
 
-        const workflowsHTML = this.state.workflows.map(workflow => `
+        const workflowsHTML = this.state.workflows.map(workflow => {
+            const isExample = workflow.source === 'examples';
+            const sourceLabel = isExample ? '<span class="source-badge source-example" title="Example workflow (read-only)">📚 Example</span>' : '';
+
+            return `
             <div class="card workflow-card">
                 <div class="workflow-header">
                     <div>
-                        <div class="workflow-name">${workflow.name}</div>
+                        <div class="workflow-name">${workflow.name} ${sourceLabel}</div>
                         <p>${workflow.description || 'No description'}</p>
                     </div>
                 </div>
@@ -800,10 +806,11 @@ const app = {
                     <button onclick="app.viewWorkflow('${workflow.name}')" class="btn btn-small btn-primary">View</button>
                     <button onclick="app.editWorkflow('${workflow.name}')" class="btn btn-small btn-secondary">✏️ Edit</button>
                     <button onclick="app.runWorkflow('${workflow.name}')" class="btn btn-small btn-success">Run</button>
-                    <button onclick="app.deleteWorkflow('${workflow.name}')" class="btn btn-small btn-danger">Delete</button>
+                    <button onclick="app.deleteWorkflow('${workflow.name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example workflows cannot be deleted"' : ''}>Delete</button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         container.innerHTML = workflowsHTML;
     },
