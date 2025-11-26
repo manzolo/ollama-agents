@@ -144,6 +144,8 @@ up: create-network ## Start all services (CPU mode)
 	@echo "$(BLUE)Starting Ollama Agents (CPU mode)...$(NC)"
 	docker compose $(COMPOSE_FILES) up -d
 	@echo "$(GREEN)Services started$(NC)"
+	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
+	@sleep 10
 	@make status
 
 up-gpu: create-network ## Start all services with GPU support
@@ -151,6 +153,8 @@ up-gpu: create-network ## Start all services with GPU support
 	@echo "$(YELLOW)Requires NVIDIA GPU + nvidia-docker runtime$(NC)"
 	docker compose $(COMPOSE_FILES_GPU) up -d
 	@echo "$(GREEN)Services started with GPU$(NC)"
+	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
+	@sleep 10
 	@make status
 
 down: ## Stop all services
