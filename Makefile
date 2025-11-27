@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent run run-raw shell-agent docs clean health status init init-gpu init-env show-compose-files list-agents create-network remove-network update-version
+.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent test-api run run-raw shell-agent docs clean health status init init-gpu init-env show-compose-files list-agents create-network remove-network update-version
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -67,6 +67,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)AGENT OPERATIONS$(NC)"
 	@echo " $(GREEN)list-agents$(NC)                   List all agents"
 	@echo " $(GREEN)test-agent agent=X$(NC)            Test agent health & info"
+	@echo " $(GREEN)test-api$(NC)                      Run comprehensive API tests"
 	@echo " $(GREEN)run agent=X file=Y$(NC)            Run agent with file (JSON output)"
 	@echo " $(GREEN)run-raw agent=X file=Y$(NC)        Run agent with file (raw output)"
 	@echo " $(GREEN)logs [agent=X] [follow=true]$(NC)  View logs"
@@ -335,6 +336,15 @@ endif
 	echo ""; \
 	echo "$(YELLOW)Agent info:$(NC)"; \
 	curl -s http://localhost:$$port/ | jq . || echo "$(RED)Info request failed$(NC)"
+
+test-api: ## Run comprehensive API integration tests
+	@echo "$(BLUE)Running API Integration Tests...$(NC)"
+	@if [ ! -x ./tests/test-api.sh ]; then \
+		echo "$(RED)Error: tests/test-api.sh not found or not executable$(NC)"; \
+		echo "$(YELLOW)Run: chmod +x tests/test-api.sh$(NC)"; \
+		exit 1; \
+	fi
+	@./tests/test-api.sh
 
 run: ## Run agent with input file (usage: make run agent=NAME file=input.yml)
 ifndef agent

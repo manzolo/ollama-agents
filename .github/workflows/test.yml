@@ -318,10 +318,10 @@ jobs:
       - name: Test - Delete Agent
         run: |
           echo "Testing agent deletion..."
-          
+
           response=$(curl -s -X DELETE http://localhost:8080/api/agents/ci-test-agent)
           echo "$response" | jq .
-          
+
           # Verify deletion success
           if echo "$response" | jq -e '.error' > /dev/null; then
             echo "Agent deletion failed"
@@ -336,6 +336,14 @@ jobs:
              exit 1
           fi
           echo "✓ Agent deletion passed"
+
+      - name: Test - Comprehensive API Integration Test
+        run: |
+          echo "Running comprehensive API integration tests..."
+          ./tests/test-api.sh
+        env:
+          BACKOFFICE_URL: http://localhost:8080
+          CLEANUP_ON_ERROR: "true"
 
       - name: Show service logs on failure
         if: failure()
@@ -368,4 +376,7 @@ jobs:
           echo "  ✓ Raw endpoint"
           echo "  ✓ OpenAPI schema"
           echo "  ✓ Context endpoints"
+          echo "  ✓ Agent creation & deployment"
+          echo "  ✓ Agent deletion"
+          echo "  ✓ Comprehensive API integration"
           echo "================================"
