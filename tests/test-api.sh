@@ -230,11 +230,13 @@ for agent in "$TEST_AGENT_1" "$TEST_AGENT_2"; do
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | head -n-1)
     if [ "$http_code" -eq 200 ]; then
-        container_running=$(echo "$body" | jq -r '.container.running')
-        if [ "$container_running" = "true" ]; then
-            log_success "Agent $agent container is running"
+        container_running=$(echo "$body" | jq -r '.container_status')
+        healthy=$(echo "$body" | jq -r '.healthy')
+        
+        if [ "$container_running" = "running" ] && [ "$healthy" = "true" ]; then
+            log_success "Agent $agent container is running and healthy"
         else
-            log_warning "Agent $agent container exists but not running"
+            log_warning "Agent $agent status issue: container=$container_running, healthy=$healthy"
         fi
         pass_test "Agent status retrieved"
     else

@@ -41,6 +41,7 @@ class DeploymentManager:
         self.agents_dir = self.project_root / "runtime" / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)
         self.shared_dir = self.project_root / "shared"
+        self.env_path = self.project_root / ".env"
 
     def _detect_host_project_root(self, project_root: Path) -> Path:
         """
