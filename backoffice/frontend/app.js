@@ -839,7 +839,7 @@ const app = {
                 name: step.name || `Step ${index + 1}`,
                 agent: step.agent,
                 input: step.input === 'original' ? 'original' :
-                       step.input === 'previous' ? 'previous' : 'custom',
+                    step.input === 'previous' ? 'previous' : 'custom',
                 customInput: (step.input !== 'original' && step.input !== 'previous') ? step.input : ''
             }));
 
@@ -1292,10 +1292,9 @@ const app = {
         Toast.info('Executing workflow...');
 
         try {
-            const result = await this.apiCall('/workflows/execute', {
+            const result = await this.apiCall(`/workflows/${workflowName}/execute`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    workflow_name: workflowName,
                     input: input
                 })
             });
