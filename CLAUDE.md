@@ -235,10 +235,9 @@ make test-agent agent=swarm-converter
 
 ### Workflow Execution
 ```bash
-curl -X POST http://localhost:8080/api/workflows/execute \
+curl -X POST http://localhost:8080/api/workflows/convert-and-validate/execute \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow_name": "convert-and-validate",
     "input": "version: '\''3.8'\''\nservices:\n  web:\n    image: nginx"
   }'
 ```
@@ -290,10 +289,11 @@ Key endpoints (full docs at http://localhost:8080/docs):
 - `GET /api/plugins` - List all plugins with manifests
 - `POST /api/plugins/discover` - Trigger plugin re-discovery
 - `GET /api/workflows` - List workflows (runtime + examples)
+- `GET /api/workflows/{name}` - Get single workflow details
 - `POST /api/workflows` - Create workflow (saved to runtime/)
 - `PUT /api/workflows/{name}` - Update workflow (runtime only)
 - `DELETE /api/workflows/{name}` - Delete workflow (runtime only, examples protected)
-- `POST /api/workflows/execute` - Execute workflow
+- `POST /api/workflows/{name}/execute` - Execute specific workflow
 - `POST /api/agents/create` - Create and deploy agent
 
 ## Visual Workflow Builder

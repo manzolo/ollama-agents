@@ -51,7 +51,6 @@ plugin_registry = PluginRegistry(PROJECT_ROOT)
 # ============================================================================
 class WorkflowExecuteRequest(BaseModel):
     """Request to execute a workflow"""
-    workflow_name: str = Field(..., description="Name of the workflow to execute")
     input: str = Field(..., description="Input data for the workflow")
     context: Optional[Dict[str, Any]] = Field(None, description="Optional context variables")
 
@@ -806,6 +805,49 @@ async def list_workflows():
     }
 
 
+@app.post("/api/workflows/{workflow_name}/execute", tags=["workflows"], summary="Execute a workflow")
+async def execute_workflow(workflow_name: str, request: WorkflowExecuteRequest):
+    """
+    Execute a specific workflow with the given input.
+
+    This is a resource-oriented endpoint where the workflow name is part of the URL path.
+    The request body only needs to contain the input data and optional context.
+
+    The workflow will be executed asynchronously and return immediately with
+    an execution ID. Use the execution ID to check the status and results.
+    """
+    # Load workflow
+    workflow = workflow_manager.load_workflow(workflow_name)
+    if not workflow:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow '{workflow_name}' not found"
+        )
+
+    # Execute workflow
+    try:
+        execution = await orchestrator.execute_workflow(
+            workflow=workflow,
+            initial_input=request.input,
+            context=request.context
+        )
+
+        # Store execution
+        executions[execution.execution_id] = execution
+
+        return {
+            "status": "executed",
+            "execution_id": execution.execution_id,
+            "result": execution.to_dict()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workflow execution failed: {str(e)}"
+        )
+
+
 @app.get("/api/workflows/{workflow_name}", tags=["workflows"], summary="Get workflow details")
 async def get_workflow(workflow_name: str):
     """Get detailed information about a specific workflow"""
@@ -904,46 +946,6 @@ async def delete_workflow(workflow_name: str):
         "status": "deleted",
         "workflow_name": workflow_name
     }
-
-
-@app.post("/api/workflows/execute", tags=["workflows"], summary="Execute a workflow")
-async def execute_workflow(request: WorkflowExecuteRequest):
-    """
-    Execute a workflow with the given input.
-
-    The workflow will be executed asynchronously and return immediately with
-    an execution ID. Use the execution ID to check the status and results.
-    """
-    # Load workflow
-    workflow = workflow_manager.load_workflow(request.workflow_name)
-    if not workflow:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Workflow '{request.workflow_name}' not found"
-        )
-
-    # Execute workflow
-    try:
-        execution = await orchestrator.execute_workflow(
-            workflow=workflow,
-            initial_input=request.input,
-            context=request.context
-        )
-
-        # Store execution
-        executions[execution.execution_id] = execution
-
-        return {
-            "status": "executed",
-            "execution_id": execution.execution_id,
-            "result": execution.to_dict()
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Workflow execution failed: {str(e)}"
-        )
 
 
 @app.get("/api/executions/{execution_id}", tags=["workflows"], summary="Get execution status")
