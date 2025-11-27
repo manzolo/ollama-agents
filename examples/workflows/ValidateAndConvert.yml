@@ -1,0 +1,11 @@
+name: ValidateAndConvert
+description: Workflow with 2 steps
+version: 1.0.0
+steps:
+- name: Validator
+  agent: swarm-validator
+  input: original
+- name: Converter
+  agent: swarm-converter
+  input: previous
+metadata: {}

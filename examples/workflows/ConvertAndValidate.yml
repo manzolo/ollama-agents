@@ -1,0 +1,11 @@
+name: ConvertAndValidate
+description: Convert docker-compose file to swarm stack and validate it
+version: 1.0.0
+steps:
+- name: convert-to-swarm
+  agent: swarm-converter
+  input: original
+- name: validate-swarm-stack
+  agent: swarm-validator
+  input: previous
+metadata: {}
