@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent run run-raw shell-agent docs clean health status init init-gpu show-compose-files list-agents create-network remove-network update-version
+.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent run run-raw shell-agent docs clean health status init init-gpu init-env show-compose-files list-agents create-network remove-network update-version
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -54,6 +54,7 @@ help: ## Show this help message
 	@echo " $(GREEN)wizard$(NC)        Interactive setup guide"
 	@echo " $(GREEN)init$(NC)          Initialize project (CPU mode)"
 	@echo " $(GREEN)init-gpu$(NC)      Initialize with GPU support"
+	@echo " $(GREEN)init-env$(NC)      Auto-configure HOST_PROJECT_ROOT"
 	@echo ""
 	@echo "$(YELLOW)BASIC OPERATIONS$(NC)"
 	@echo " $(GREEN)up$(NC)            Start services (CPU mode)"
@@ -88,7 +89,7 @@ help: ## Show this help message
 # ============================================================================
 # Wizard Mode
 # ============================================================================
-wizard: create-network ## Interactive setup guide
+wizard: init-env create-network ## Interactive setup guide
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
 	@echo "$(BLUE)║             OLLAMA AGENTS - Setup Wizard                     ║$(NC)"
 	@echo "$(BLUE)╚══════════════════════════════════════════════════════════════╝$(NC)"
@@ -178,9 +179,46 @@ build: create-network ## Build all services
 	@echo "$(GREEN)Build complete$(NC)"
 
 # ============================================================================
+# Environment Initialization
+# ============================================================================
+init-env: ## Auto-detect and configure HOST_PROJECT_ROOT in .env
+	@echo "$(BLUE)Configuring environment...$(NC)"
+	@PROJECT_PATH=$$(pwd); \
+	if [ ! -f .env ]; then \
+		if [ ! -f .env.example ]; then \
+			echo "$(RED)Error: .env.example not found$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "$(YELLOW)Creating .env from .env.example...$(NC)"; \
+		cp .env.example .env; \
+		echo "$(GREEN)✓ Created .env file$(NC)"; \
+	fi; \
+	if grep -q "^HOST_PROJECT_ROOT=" .env; then \
+		CURRENT_VALUE=$$(grep "^HOST_PROJECT_ROOT=" .env | cut -d'=' -f2-); \
+		if [ "$$CURRENT_VALUE" = "$$PROJECT_PATH" ]; then \
+			echo "$(GREEN)✓ HOST_PROJECT_ROOT is already correctly set to: $$PROJECT_PATH$(NC)"; \
+		elif [ "$$CURRENT_VALUE" = "__AUTO_DETECTED__" ]; then \
+			echo "$(YELLOW)Placeholder detected, setting to: $$PROJECT_PATH$(NC)"; \
+			sed -i.bak "s|^HOST_PROJECT_ROOT=.*|HOST_PROJECT_ROOT=$$PROJECT_PATH|" .env && rm -f .env.bak; \
+			echo "$(GREEN)✓ HOST_PROJECT_ROOT configured in .env$(NC)"; \
+		else \
+			echo "$(YELLOW)Current value: $$CURRENT_VALUE$(NC)"; \
+			echo "$(YELLOW)Updating to:   $$PROJECT_PATH$(NC)"; \
+			sed -i.bak "s|^HOST_PROJECT_ROOT=.*|HOST_PROJECT_ROOT=$$PROJECT_PATH|" .env && rm -f .env.bak; \
+			echo "$(GREEN)✓ HOST_PROJECT_ROOT updated in .env$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)HOST_PROJECT_ROOT not found in .env, adding it...$(NC)"; \
+		echo "" >> .env; \
+		echo "# Auto-detected host filesystem path" >> .env; \
+		echo "HOST_PROJECT_ROOT=$$PROJECT_PATH" >> .env; \
+		echo "$(GREEN)✓ HOST_PROJECT_ROOT added to .env$(NC)"; \
+	fi
+
+# ============================================================================
 # Quick Initialization
 # ============================================================================
-init: create-network build up ## Full init: build + start + pull models (CPU)
+init: init-env create-network build up ## Full init: auto-configure + build + start + pull models (CPU)
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 12
 	@make pull-models
@@ -189,7 +227,7 @@ init: create-network build up ## Full init: build + start + pull models (CPU)
 	@echo "Visit http://localhost:8080 for the Web UI"
 	@echo "Run 'make health' to check agents"
 
-init-gpu: create-network build up-gpu ## Full init with GPU support
+init-gpu: init-env create-network build up-gpu ## Full init with GPU support
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 12
 	@make pull-models

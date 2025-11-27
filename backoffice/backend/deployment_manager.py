@@ -20,9 +20,18 @@ class DeploymentManager:
 
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root)
-        # Get host filesystem path for Docker mounts
+
+        # Initialize Docker client first (needed for auto-detection)
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            print(f"Warning: Could not connect to Docker: {e}")
+            self.docker_client = None
+
+        # Get host filesystem path for Docker mounts (with auto-detection)
         import os
-        self.host_project_root = Path(os.getenv("HOST_PROJECT_ROOT", str(project_root)))
+        self.host_project_root = self._detect_host_project_root(project_root)
+
         self.docker_compose_path = self.project_root / "docker-compose.yml"
         # Directory for individual agent compose files (runtime, git-ignored)
         self.agents_compose_dir = self.project_root / "runtime" / "compose"
@@ -33,12 +42,58 @@ class DeploymentManager:
         self.agents_dir.mkdir(parents=True, exist_ok=True)
         self.shared_dir = self.project_root / "shared"
 
-        # Initialize Docker client
+    def _detect_host_project_root(self, project_root: Path) -> Path:
+        """
+        Auto-detect the host filesystem path for the project.
+
+        This is critical because when running docker-compose via Docker socket,
+        volume mounts must use the HOST machine's absolute path, not the
+        container's internal path.
+
+        Detection strategy:
+        1. Check HOST_PROJECT_ROOT environment variable
+        2. If not set, try to auto-detect by inspecting our own container
+        3. Fall back to project_root if detection fails
+
+        Args:
+            project_root: The project root path inside the container
+
+        Returns:
+            Path: The absolute path on the host machine
+        """
+        import os
+
+        # Strategy 1: Use HOST_PROJECT_ROOT if explicitly set
+        env_value = os.getenv("HOST_PROJECT_ROOT")
+        if env_value and env_value.strip():
+            detected_path = Path(env_value)
+            print(f"✓ Using HOST_PROJECT_ROOT from environment: {detected_path}")
+            return detected_path
+
+        # Strategy 2: Auto-detect by inspecting our own container
         try:
-            self.docker_client = docker.from_env()
+            if self.docker_client:
+                # Try to get the backoffice container
+                container = self.docker_client.containers.get("backoffice")
+
+                # Look for the /project mount in the container
+                mounts = container.attrs.get("Mounts", [])
+                for mount in mounts:
+                    # Find the mount that corresponds to our project root
+                    destination = mount.get("Destination", "")
+                    if destination == "/project":
+                        source = mount.get("Source", "")
+                        if source:
+                            detected_path = Path(source)
+                            print(f"✓ Auto-detected host path from container mount: {detected_path}")
+                            return detected_path
         except Exception as e:
-            print(f"Warning: Could not connect to Docker: {e}")
-            self.docker_client = None
+            print(f"Warning: Could not auto-detect host path from container: {e}")
+
+        # Strategy 3: Fall back to project_root (may not work for Docker socket operations)
+        print(f"⚠ Could not detect host path, using container path: {project_root}")
+        print(f"⚠ This may cause issues with agent deployment. Run 'make init-env' to configure.")
+        return Path(project_root)
 
     def get_compose_files(self, agent_name: str = None, include_gpu: bool = False) -> list:
         """
@@ -90,11 +145,9 @@ class DeploymentManager:
         env_prefix = agent_name.upper().replace("-", "_")
 
         # Create a complete, standalone compose file
-        # Use host filesystem paths for volume mounts (required when running docker-compose via socket)
-        # But use relative path for build context (relative to where docker-compose runs)
-        host_runtime_agents = self.host_project_root / "runtime" / "agents" / agent_name
-        host_shared_context = self.host_project_root / "shared" / "context" / agent_name
-
+        # Use ${HOST_PROJECT_ROOT} variable for volume mounts to allow portability
+        # This variable is defined in .env or defaults to $PWD in docker-compose.yml
+        
         compose_content = f'''# ==========================================================================
 # AGENT: {agent_name.upper()}
 # ==========================================================================
@@ -113,9 +166,9 @@ services:
     ports:
       - "${{{env_prefix}_PORT:-{port}}}:8000"
     volumes:
-      - {host_runtime_agents}/prompt.txt:/app/prompt.txt:ro
-      - {host_runtime_agents}/config.yml:/app/config.yml:ro
-      - {host_shared_context}:/app/context
+      - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
+      - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/config.yml:/app/config.yml:ro
+      - ${{HOST_PROJECT_ROOT}}/shared/context/{agent_name}:/app/context
     networks:
       - agent-network
     environment:

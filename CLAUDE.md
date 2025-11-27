@@ -151,6 +151,11 @@ host_agent_dir = self.host_project_root / "runtime" / "agents" / agent_name
 
 This prevents "IsADirectoryError" when Docker mounts files before they're fully written.
 
+**Auto-Detection**: The system automatically detects `HOST_PROJECT_ROOT` through:
+1. `make init-env` command (recommended during setup)
+2. Automatic configuration during `make init`, `make init-gpu`, or `make wizard`
+3. Runtime auto-detection by inspecting the backoffice container's mounts (fallback)
+
 ### Plugin Manifest Validation
 
 All plugins must pass `PluginValidator.validate()` checks:
@@ -240,8 +245,17 @@ curl -X POST http://localhost:8080/api/workflows/execute \
 
 ## Environment Variables
 
+The project uses `.env.example` as a template (git-tracked) and `.env` for local configuration (gitignored).
+
+**First-time setup:**
+- Run `make init`, `make wizard`, or `make init-env` - this creates `.env` from `.env.example` and auto-configures all values
+
 Key variables in `.env`:
 - `HOST_PROJECT_ROOT` - Absolute host path (required for Docker socket operations)
+  - **Auto-configured**: Automatically detected and set when you run `make init-env`
+  - Also set by `make init`, `make init-gpu`, or `make wizard`
+  - Runtime fallback: Auto-detected by inspecting backoffice container mounts
+  - **Never commit this value to git** - `.env` is gitignored for this reason
 - `OLLAMA_HOST` - Ollama service URL (default: `http://ollama:11434`)
 - `OLLAMA_PORT` - Ollama external port (default: `11434`)
 - `BACKOFFICE_PORT` - Backoffice UI port (default: `8080`)
@@ -259,8 +273,9 @@ Key variables in `.env`:
 - Clear browser cache (Ctrl+Shift+R)
 
 ### "IsADirectoryError" on Agent Creation
-- Ensure `HOST_PROJECT_ROOT` is set correctly in `.env`
+- Run `make init-env` to auto-detect and configure `HOST_PROJECT_ROOT`
 - Check absolute paths in generated compose files
+- Verify: `grep HOST_PROJECT_ROOT .env` shows correct path
 
 ### Plugin Not Discovered
 - Verify `plugin.yml` exists and is valid YAML
