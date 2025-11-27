@@ -501,9 +501,16 @@ Return ONLY the system prompt itself, ready to use. Do not include explanations 
     try:
         # Call Ollama directly
         import httpx
+        import traceback
         ollama_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Use longer timeout for CPU mode (5 minutes) vs GPU (2 minutes)
+        # Check for GPU mode via OLLAMA_GPU env var or default to longer timeout
+        is_gpu = os.getenv("OLLAMA_GPU", "false").lower() == "true"
+        timeout = 120.0 if is_gpu else 300.0
+        print(f"Using timeout of {timeout}s for prompt generation ({'GPU' if is_gpu else 'CPU'} mode)")
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{ollama_host}/api/generate",
                 json={
@@ -527,6 +534,11 @@ Return ONLY the system prompt itself, ready to use. Do not include explanations 
             }
 
     except Exception as e:
+        # Log the actual error for debugging
+        print(f"ERROR: Failed to generate prompt: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        traceback.print_exc()
+
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate prompt: {str(e)}"
