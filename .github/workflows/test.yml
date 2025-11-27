@@ -213,131 +213,7 @@ jobs:
           done
           echo "Backoffice is healthy!"
 
-      - name: Test - Create Agent
-        run: |
-          echo "Testing agent creation..."
-          cat > create-agent.json << 'EOF'
-          {
-            "name": "ci-test-agent",
-            "description": "Agent created by CI",
-            "port": 7005,
-            "model": "llama3.2",
-            "temperature": 0.7,
-            "max_tokens": 1000,
-            "capabilities": ["testing"],
-            "system_prompt": "You are a CI test agent."
-          }
-          EOF
-
-          response=$(curl -s -X POST http://localhost:8080/api/agents/create \
-            -H "Content-Type: application/json" \
-            -d @create-agent.json)
-          
-          echo "$response" | jq .
-          
-          # Verify creation success
-          if echo "$response" | jq -e '.error' > /dev/null; then
-            echo "Agent creation failed"
-            exit 1
-          fi
-
-          # Verify agent appears in list
-          echo "Verifying agent in list..."
-          list_response=$(curl -s http://localhost:8080/api/agents/definitions)
-          if ! echo "$list_response" | jq -e '.definitions[] | select(.name == "ci-test-agent")' > /dev/null; then
-             echo "Created agent not found in definitions list"
-             echo "List response:"
-             echo "$list_response" | jq .
-             exit 1
-          fi
-          echo "✓ Agent creation passed"
-
-      - name: Test - Deploy Agent
-        run: |
-          echo "Testing agent deployment..."
-          
-          response=$(curl -s -X POST http://localhost:8080/api/agents/ci-test-agent/deploy)
-          echo "$response" | jq .
-          
-          # Verify deployment success
-          status=$(echo "$response" | jq -r '.status')
-          if [ "$status" != "success" ]; then
-            echo "❌ Agent deployment failed"
-            exit 1
-          fi
-
-          # Check container status
-          echo "Checking container status..."
-          sleep 3
-          container_status=$(docker inspect agent-ci-test-agent --format='{{.State.Status}}' 2>/dev/null || echo "not_found")
-          echo "Container status: $container_status"
-          
-          if [ "$container_status" = "exited" ] || [ "$container_status" = "dead" ]; then
-            echo "❌ Container crashed! Showing logs:"
-            docker compose logs agent-ci-test-agent
-            exit 1
-          fi
-
-          # Wait for agent to be healthy
-          echo "Waiting for deployed agent to be healthy..."
-          max_attempts=20
-          attempt=0
-          until curl -f -s http://localhost:7005/health > /dev/null 2>&1; do
-            attempt=$((attempt + 1))
-            if [ $attempt -ge $max_attempts ]; then
-              echo "❌ Deployed agent failed to become healthy after $max_attempts attempts"
-              echo "Container status:"
-              docker inspect agent-ci-test-agent --format='{{.State.Status}}' 2>/dev/null || echo "Container not found"
-              echo "Container logs:"
-              docker compose logs agent-ci-test-agent
-              exit 1
-            fi
-            echo "Waiting for agent... ($attempt/$max_attempts)"
-            sleep 5
-          done
-          echo "✅ Deployed agent is healthy!"
-
-          # Verify agent appears in running agents list via /api/agents
-          echo "Verifying agent in running agents list..."
-          list_response=$(curl -s http://localhost:8080/api/agents)
-          echo "API response:"
-          echo "$list_response" | jq .
-          
-          if ! echo "$list_response" | jq -e '.agents["ci-test-agent"]' > /dev/null; then
-             echo "❌ Deployed agent not found in running list"
-             echo "Expected agent 'ci-test-agent' to be in the agents list"
-             exit 1
-          fi
-          
-          # Verify agent is actually active (has status)
-          agent_status=$(echo "$list_response" | jq -r '.agents["ci-test-agent"].status // "unknown"')
-          echo "Agent status from API: $agent_status"
-          
-          echo "✅ Agent deployment verification passed"
-
-      - name: Test - Delete Agent
-        run: |
-          echo "Testing agent deletion..."
-
-          response=$(curl -s -X DELETE http://localhost:8080/api/agents/ci-test-agent)
-          echo "$response" | jq .
-
-          # Verify deletion success
-          if echo "$response" | jq -e '.error' > /dev/null; then
-            echo "Agent deletion failed"
-            exit 1
-          fi
-
-          # Verify agent is gone from list
-          echo "Verifying agent removed from list..."
-          list_response=$(curl -s http://localhost:8080/api/agents/definitions)
-          if echo "$list_response" | jq -e '.definitions[] | select(.name == "ci-test-agent")' > /dev/null; then
-             echo "Deleted agent still found in definitions list"
-             exit 1
-          fi
-          echo "✓ Agent deletion passed"
-
-      - name: Test - Comprehensive API Integration Test
+      - name: Test - Comprehensive API Integration
         run: |
           echo "Running comprehensive API integration tests..."
           ./tests/test-api.sh
@@ -370,13 +246,14 @@ jobs:
           echo "✅ All tests passed successfully!"
           echo "================================"
           echo "Tests run:"
-          echo "  ✓ Health check"
-          echo "  ✓ Agent info"
+          echo "  ✓ Agent health check"
+          echo "  ✓ Agent info endpoint"
           echo "  ✓ Process endpoint"
           echo "  ✓ Raw endpoint"
           echo "  ✓ OpenAPI schema"
           echo "  ✓ Context endpoints"
-          echo "  ✓ Agent creation & deployment"
-          echo "  ✓ Agent deletion"
-          echo "  ✓ Comprehensive API integration"
+          echo "  ✓ Comprehensive API integration (21 tests)"
+          echo "    - Agent creation & deployment"
+          echo "    - Workflow creation & execution"
+          echo "    - Agent deletion & cleanup"
           echo "================================"
