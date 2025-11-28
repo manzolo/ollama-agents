@@ -116,13 +116,16 @@ curl -X POST http://localhost:8080/api/plugins/discover
 │   │   ├── app.js
 │   │   └── styles.css
 │   └── update-version.sh # Git hash-based cache busting
+├── docker-compose.yml         # Main compose file (backoffice only)
+├── docker-compose.ollama.yml  # Optional Ollama service (included by default)
+├── docker-compose.gpu.yml     # GPU support overlay
 ├── examples/             # Git-tracked templates (READ-ONLY)
 │   ├── agents/          # Example agent plugins
-│   ├── compose/         # Example compose files
+│   ├── compose/         # Example compose files + .env files
 │   └── workflows/       # Example workflow templates
 ├── runtime/             # Gitignored user content (READ-WRITE)
 │   ├── agents/          # User-created agents
-│   ├── compose/         # User-created compose files
+│   ├── compose/         # User-created compose files + .env files
 │   └── workflows/       # User-created workflows
 ├── shared/context/      # Agent context memory (per-agent dirs)
 └── docs/               # Documentation
@@ -276,14 +279,48 @@ The project uses `.env.example` as a template (git-tracked) and `.env` for local
 - Run `make init`, `make wizard`, or `make init-env` - this creates `.env` from `.env.example` and auto-configures all values
 
 Key variables in `.env`:
+
+### Docker Network Configuration
+- `DOCKER_NETWORK_NAME` - Docker network name for agent communication (default: `ollama-agent-network`)
+  - All services (agents, ollama, backoffice) use this network
+  - Network is automatically created by docker-compose
+  - Can be customized if you need multiple isolated agent networks
+
+### Host Configuration
 - `HOST_PROJECT_ROOT` - Absolute host path (required for Docker socket operations)
   - **Auto-configured**: Automatically detected and set when you run `make init-env`
   - Also set by `make init`, `make init-gpu`, or `make wizard`
   - Runtime fallback: Auto-detected by inspecting backoffice container mounts
   - **Never commit this value to git** - `.env` is gitignored for this reason
+
+### Ollama Configuration
 - `OLLAMA_HOST` - Ollama service URL (default: `http://ollama:11434`)
+  - Use `http://ollama:11434` for local Docker Ollama (default)
+  - Use `http://host.docker.internal:11434` for Ollama running on host machine
+  - Use `http://192.168.1.100:11434` for external Ollama server
+  - Can be overridden per-agent in agent's `.env` file
 - `OLLAMA_PORT` - Ollama external port (default: `11434`)
+  - Only needed if using `docker-compose.ollama.yml` (local Docker Ollama)
+  - Ignored if using external Ollama
+
+### Backoffice Configuration
 - `BACKOFFICE_PORT` - Backoffice UI port (default: `8080`)
+
+### Using External Ollama
+
+The Ollama service is optional and can be external to docker-compose:
+
+**With local Docker Ollama (default):**
+```bash
+make up          # Includes docker-compose.ollama.yml
+make up-gpu      # Includes docker-compose.ollama.yml with GPU support
+```
+
+**With external Ollama (skip docker-compose.ollama.yml):**
+```bash
+# Set OLLAMA_HOST in .env to your external server
+docker compose -f docker-compose.yml -f examples/compose/swarm-converter.yml up -d
+```
 
 ## Troubleshooting
 

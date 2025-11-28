@@ -1,0 +1,50 @@
+# ============================================================================
+# OLLAMA SERVICE - Optional Local LLM Engine
+# ============================================================================
+# This compose file provides a local Ollama service.
+# Include this file only if you want to run Ollama in Docker.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
+#
+# Or use the Makefile:
+#   make up          # Without GPU
+#   make up-gpu      # With GPU (also includes docker-compose.gpu.yml)
+#
+# If you have an external Ollama server, skip this file and configure
+# OLLAMA_HOST in your .env file instead.
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # OLLAMA SERVICE - Core LLM Engine
+  # ==========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-engine
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - agent-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # GPU support is configured in docker-compose.gpu.yml
+    # To enable GPU: docker compose -f docker-compose.yml -f docker-compose.ollama.yml -f docker-compose.gpu.yml up
+    # Or use: make up-gpu
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+volumes:
+  ollama-models:
+    name: ollama-models-data
+    driver: local

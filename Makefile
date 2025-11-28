@@ -39,8 +39,9 @@ remove-network:
 EXAMPLE_COMPOSE_FILES := $(wildcard examples/compose/*.yml)
 RUNTIME_COMPOSE_FILES := $(wildcard runtime/compose/*.yml)
 AGENT_COMPOSE_FILES   := $(EXAMPLE_COMPOSE_FILES) $(RUNTIME_COMPOSE_FILES)
-COMPOSE_FILES         := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
-COMPOSE_FILES_GPU     := $(COMPOSE_FILES) -f docker-compose.gpu.yml
+# Include Ollama service by default (can be omitted if using external Ollama)
+COMPOSE_FILES         := -f docker-compose.yml -f docker-compose.ollama.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
+COMPOSE_FILES_GPU     := -f docker-compose.yml -f docker-compose.ollama.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file)) -f docker-compose.gpu.yml
 
 # ============================================================================
 # Help

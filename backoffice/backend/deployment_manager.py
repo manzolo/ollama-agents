@@ -109,6 +109,11 @@ class DeploymentManager:
         """
         files = ["-f", str(self.docker_compose_path)]
 
+        # Add Ollama service (optional, can be external)
+        ollama_compose = self.project_root / "docker-compose.ollama.yml"
+        if ollama_compose.exists():
+            files.extend(["-f", str(ollama_compose)])
+
         # Add specific agent compose file or all agent compose files
         if agent_name:
             agent_compose = self.agents_compose_dir / f"{agent_name}.yml"
@@ -232,7 +237,7 @@ services:
 networks:
   agent-network:
     external: true
-    name: ollama-agent-network
+    name: ${{DOCKER_NETWORK_NAME:-ollama-agent-network}}
 '''
 
         compose_path = self.agents_compose_dir / f"{agent_name}.yml"

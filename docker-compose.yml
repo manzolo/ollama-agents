@@ -4,6 +4,11 @@
 # This Docker Compose file defines a modular architecture for running
 # multiple specialized AI agents powered by Ollama.
 #
+# OLLAMA SERVICE:
+# - By default, Ollama is NOT included in this file
+# - To use local Docker Ollama: docker compose -f docker-compose.yml -f docker-compose.ollama.yml up
+# - To use external Ollama: Set OLLAMA_HOST in .env to your external server
+#
 # To add a new agent:
 # 1. Copy the swarm-converter service block
 # 2. Update the service name, container name, port, and volumes
@@ -12,31 +17,6 @@
 # ============================================================================
 
 services:
-  # ==========================================================================
-  # OLLAMA SERVICE - Core LLM Engine
-  # ==========================================================================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama-engine
-    restart: unless-stopped
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    networks:
-      - agent-network
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-    # GPU support is configured in docker-compose.gpu.yml
-    # To enable GPU: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
-    # Or use: make up-gpu
-    healthcheck:
-      test: [ "CMD", "ollama", "list" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
   # ==========================================================================
   # BACKOFFICE - Web UI & Workflow Manager
   # ==========================================================================
@@ -84,12 +64,4 @@ services:
 networks:
   agent-network:
     driver: bridge
-    name: ollama-agent-network
-
-# ============================================================================
-# VOLUMES
-# ============================================================================
-volumes:
-  ollama-models:
-    name: ollama-models-data
-    driver: local
+    name: ${DOCKER_NETWORK_NAME:-ollama-agent-network}

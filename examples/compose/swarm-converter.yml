@@ -34,4 +34,4 @@ services:
 networks:
   agent-network:
     external: true
-    name: ollama-agent-network
+    name: ${DOCKER_NETWORK_NAME:-ollama-agent-network}
