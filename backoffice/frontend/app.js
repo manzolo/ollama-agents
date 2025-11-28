@@ -311,6 +311,7 @@ const app = {
         //console.log('Initializing Backoffice App...');
         this.setupTabs();
         this.setupForms();
+        this.loadModels();  // Load available Ollama models
         this.loadAgents();
         this.loadWorkflows();
         this.loadExecutions();
@@ -396,6 +397,134 @@ const app = {
             console.error('API Error:', error);
             Toast.error(error.message);
             throw error;
+        }
+    },
+
+    // Load available Ollama models
+    async loadModels(ollamaHost = null) {
+        try {
+            // Build API URL with optional ollama_host parameter
+            let apiUrl = '/models';
+            if (ollamaHost) {
+                apiUrl += `?ollama_host=${encodeURIComponent(ollamaHost)}`;
+            }
+
+            const data = await this.apiCall(apiUrl);
+            const modelSelect = document.getElementById('agent-model');
+
+            if (!modelSelect) return;
+
+            // Clear existing options
+            modelSelect.innerHTML = '';
+
+            // Add models from Ollama
+            if (data.models && data.models.length > 0) {
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.name;
+                    const sizeInfo = model.size_gb ? ` (${model.size_gb} GB)` : '';
+                    const paramInfo = model.parameter_size ? ` - ${model.parameter_size}` : '';
+                    option.textContent = `${model.name}${paramInfo}${sizeInfo}`;
+                    modelSelect.appendChild(option);
+                });
+            } else {
+                // Fallback to default models if API fails
+                const defaultModels = [
+                    { value: 'llama3.2', label: 'llama3.2 (General purpose)' },
+                    { value: 'codellama', label: 'codellama (Code-focused)' },
+                    { value: 'mistral', label: 'mistral (Fast & efficient)' },
+                    { value: 'mixtral', label: 'mixtral (Complex reasoning)' }
+                ];
+                defaultModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.value;
+                    option.textContent = model.label;
+                    modelSelect.appendChild(option);
+                });
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error loading models:', error);
+            // Use fallback default models on error
+            const modelSelect = document.getElementById('agent-model');
+            if (modelSelect && modelSelect.options.length === 0) {
+                const defaultModels = [
+                    { value: 'llama3.2', label: 'llama3.2 (General purpose)' },
+                    { value: 'codellama', label: 'codellama (Code-focused)' },
+                    { value: 'mistral', label: 'mistral (Fast & efficient)' },
+                    { value: 'mixtral', label: 'mixtral (Complex reasoning)' }
+                ];
+                defaultModels.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.value;
+                    option.textContent = model.label;
+                    modelSelect.appendChild(option);
+                });
+            }
+            throw error;
+        }
+    },
+
+    // Test Ollama connection and load models
+    async testOllamaConnection() {
+        const ollamaHostInput = document.getElementById('agent-ollama-host');
+        const testBtn = document.getElementById('test-connection-btn');
+        const ollamaHost = ollamaHostInput.value.trim();
+
+        if (!ollamaHost) {
+            this.showAlert('Please enter an Ollama host URL', 'error');
+            return;
+        }
+
+        // Update button state
+        const originalText = testBtn.innerHTML;
+        testBtn.innerHTML = '⏳ Testing...';
+        testBtn.disabled = true;
+
+        try {
+            // Test connection by loading models from specified host
+            const data = await this.loadModels(ollamaHost);
+
+            // Check if we got valid data
+            if (!data || !data.models) {
+                throw new Error('No models returned from server');
+            }
+
+            // Success!
+            testBtn.innerHTML = '✓ Connected';
+            testBtn.classList.add('btn-success');
+            testBtn.classList.remove('btn-secondary', 'btn-danger');
+
+            // Show success message
+            const modelCount = data.count || data.models.length || 0;
+            const hostUrl = data.ollama_host || ollamaHost;
+
+            Toast.success(`Successfully connected to ${hostUrl}! Found ${modelCount} model(s).`);
+
+            // Reset button after 3 seconds
+            setTimeout(() => {
+                testBtn.innerHTML = originalText;
+                testBtn.disabled = false;
+                testBtn.classList.remove('btn-success');
+                testBtn.classList.add('btn-secondary');
+            }, 3000);
+        } catch (error) {
+            console.error('Connection test error:', error);
+
+            testBtn.innerHTML = '✗ Failed';
+            testBtn.classList.add('btn-danger');
+            testBtn.classList.remove('btn-secondary', 'btn-success');
+
+            Toast.error(`Failed to connect: ${error.message || 'Unknown error'}`);
+
+            // Reset button after 3 seconds
+            setTimeout(() => {
+                testBtn.innerHTML = originalText;
+                testBtn.disabled = false;
+                testBtn.classList.remove('btn-danger');
+                testBtn.classList.add('btn-secondary');
+            }, 3000);
         }
     },
 
@@ -543,6 +672,7 @@ const app = {
             document.getElementById('agent-name').disabled = true; // Can't change name
             document.getElementById('agent-description').value = definition.description;
             document.getElementById('agent-port').value = definition.port;
+            document.getElementById('agent-ollama-host').value = definition.ollama_host || 'http://ollama:11434';
             document.getElementById('agent-model').value = definition.model;
             document.getElementById('agent-temperature').value = definition.temperature;
             document.getElementById('temperature-value').textContent = definition.temperature;
@@ -568,6 +698,7 @@ const app = {
         const name = document.getElementById('agent-name').value.trim();
         const description = document.getElementById('agent-description').value.trim();
         const port = parseInt(document.getElementById('agent-port').value);
+        const ollamaHost = document.getElementById('agent-ollama-host').value.trim() || 'http://ollama:11434';
         const model = document.getElementById('agent-model').value;
         const temperature = parseFloat(document.getElementById('agent-temperature').value);
         const maxTokens = parseInt(document.getElementById('agent-max-tokens').value);
@@ -592,6 +723,7 @@ const app = {
                     name,
                     description,
                     port,
+                    ollama_host: ollamaHost,
                     model,
                     temperature,
                     max_tokens: maxTokens,
@@ -628,6 +760,7 @@ const app = {
         const name = this.editingAgentName;
         const description = document.getElementById('agent-description').value.trim();
         const port = parseInt(document.getElementById('agent-port').value);
+        const ollamaHost = document.getElementById('agent-ollama-host').value.trim() || 'http://ollama:11434';
         const model = document.getElementById('agent-model').value;
         const temperature = parseFloat(document.getElementById('agent-temperature').value);
         const maxTokens = parseInt(document.getElementById('agent-max-tokens').value);
@@ -646,6 +779,7 @@ const app = {
                     name,
                     description,
                     port,
+                    ollama_host: ollamaHost,
                     model,
                     temperature,
                     max_tokens: maxTokens,

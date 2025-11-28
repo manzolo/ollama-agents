@@ -75,6 +75,7 @@ class AgentCreateRequest(BaseModel):
     name: str = Field(..., description="Agent name (alphanumeric with hyphens)", pattern="^[a-z0-9-]+$")
     description: str = Field(..., description="Agent description")
     port: int = Field(..., description="Port number (7000-7999)", ge=7000, le=7999)
+    ollama_host: str = Field("http://ollama:11434", description="Ollama server URL for this agent")
     model: str = Field("llama3.2", description="Model to use")
     temperature: float = Field(0.7, description="Temperature (0.0-1.0)", ge=0.0, le=1.0)
     max_tokens: int = Field(4096, description="Max tokens", ge=256, le=32768)
@@ -87,6 +88,7 @@ class AgentUpdateRequest(BaseModel):
     name: str = Field(..., description="Agent name (alphanumeric with hyphens)", pattern="^[a-z0-9-]+$")
     description: str = Field(..., description="Agent description")
     port: int = Field(..., description="Port number (7000-7999)", ge=7000, le=7999)
+    ollama_host: str = Field("http://ollama:11434", description="Ollama server URL for this agent")
     model: str = Field("llama3.2", description="Model to use")
     temperature: float = Field(0.7, description="Temperature (0.0-1.0)", ge=0.0, le=1.0)
     max_tokens: int = Field(4096, description="Max tokens", ge=256, le=32768)
@@ -194,6 +196,64 @@ async def health_check():
         "workflows_examples": str(WORKFLOWS_EXAMPLES_DIR),
         "registered_agents": len(plugin_registry.list_all())
     }
+
+
+@app.get("/api/models", tags=["ollama"], summary="Get available Ollama models")
+async def get_available_models(ollama_host: Optional[str] = None):
+    """
+    Get list of available models from Ollama server.
+
+    Args:
+        ollama_host: Optional Ollama host URL (defaults to OLLAMA_HOST env var)
+
+    Returns:
+        List of model information including name, size, and modification date
+    """
+    try:
+        # Use provided host or fallback to environment variable
+        if not ollama_host:
+            ollama_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+
+        # Normalize host URL (ensure it starts with http:// or https://)
+        if not ollama_host.startswith(("http://", "https://")):
+            ollama_host = f"http://{ollama_host}"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{ollama_host}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract and format model information
+            models = []
+            for model in data.get("models", []):
+                models.append({
+                    "name": model.get("name", "").replace(":latest", ""),
+                    "full_name": model.get("name", ""),
+                    "size": model.get("size", 0),
+                    "size_gb": round(model.get("size", 0) / (1024**3), 2),
+                    "modified_at": model.get("modified_at", ""),
+                    "family": model.get("details", {}).get("family", ""),
+                    "parameter_size": model.get("details", {}).get("parameter_size", ""),
+                    "quantization": model.get("details", {}).get("quantization_level", "")
+                })
+
+            return {
+                "status": "success",
+                "models": models,
+                "count": len(models),
+                "ollama_host": ollama_host
+            }
+
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to connect to Ollama server at {ollama_host}: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching models from {ollama_host}: {str(e)}"
+        )
 
 
 # ============================================================================
@@ -425,6 +485,7 @@ async def create_agent(request: AgentCreateRequest):
             name=request.name,
             description=request.description,
             port=request.port,
+            ollama_host=request.ollama_host,
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,

@@ -15,6 +15,7 @@ class AgentDefinition(BaseModel):
     name: str
     description: str
     port: int
+    ollama_host: str = "http://ollama:11434"
     model: str = "llama3.2"
     temperature: float = 0.7
     max_tokens: int = 4096
@@ -45,6 +46,7 @@ class AgentManager:
             },
             "deployment": {
                 "port": agent.port,
+                "ollama_host": agent.ollama_host,
                 "model": agent.model,
                 "temperature": agent.temperature,
                 "max_tokens": agent.max_tokens

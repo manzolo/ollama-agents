@@ -141,6 +141,7 @@ class DeploymentManager:
         model = agent_definition["deployment"]["model"]
         temperature = agent_definition["deployment"]["temperature"]
         max_tokens = agent_definition["deployment"]["max_tokens"]
+        ollama_host = agent_definition["deployment"].get("ollama_host", "http://ollama:11434")
         description = agent_definition["agent"]["description"]
 
         env_content = f'''# ============================================================================
@@ -163,7 +164,7 @@ TEMPERATURE={temperature}
 MAX_TOKENS={max_tokens}
 
 # Ollama host URL (can be overridden per agent)
-OLLAMA_HOST=http://ollama:11434
+OLLAMA_HOST={ollama_host}
 
 # Agent name (used for logging and identification)
 AGENT_NAME={agent_name}
