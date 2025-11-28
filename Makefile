@@ -1,4 +1,4 @@
-.PHONY: help wizard up up-gpu down restart restart-gpu build logs logs-ollama logs-backoffice ps pull-models test-agent test-api run run-raw shell-agent docs clean health status init init-gpu init-env show-compose-files list-agents create-network remove-network update-version
+.PHONY: help wizard up up-gpu up-no-ollama down restart restart-gpu restart-no-ollama build logs logs-ollama logs-backoffice ps pull-models test-agent test-api run run-raw shell-agent docs clean health status init init-gpu init-env show-compose-files list-agents create-network remove-network update-version
 
 # ============================================================================
 # OLLAMA AGENTS - Makefile
@@ -39,9 +39,12 @@ remove-network:
 EXAMPLE_COMPOSE_FILES := $(wildcard examples/compose/*.yml)
 RUNTIME_COMPOSE_FILES := $(wildcard runtime/compose/*.yml)
 AGENT_COMPOSE_FILES   := $(EXAMPLE_COMPOSE_FILES) $(RUNTIME_COMPOSE_FILES)
-# Include Ollama service by default (can be omitted if using external Ollama)
+# Base compose files (without Ollama service)
 COMPOSE_FILES         := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
 COMPOSE_FILES_GPU     := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file)) -f docker-compose.gpu.yml
+# With Ollama profile enabled
+COMPOSE_CMD           := docker compose
+COMPOSE_CMD_OLLAMA    := docker compose --profile ollama
 
 # ============================================================================
 # Help
@@ -58,12 +61,14 @@ help: ## Show this help message
 	@echo " $(GREEN)init-env$(NC)      Auto-configure HOST_PROJECT_ROOT"
 	@echo ""
 	@echo "$(YELLOW)BASIC OPERATIONS$(NC)"
-	@echo " $(GREEN)up$(NC)            Start services (CPU mode)"
-	@echo " $(GREEN)up-gpu$(NC)        Start services with GPU"
-	@echo " $(GREEN)down$(NC)          Stop all services"
-	@echo " $(GREEN)restart$(NC)       Restart services"
-	@echo " $(GREEN)status$(NC)        Show service status"
-	@echo " $(GREEN)health$(NC)        Check agent health"
+	@echo " $(GREEN)up$(NC)                Start services with Ollama (CPU)"
+	@echo " $(GREEN)up-gpu$(NC)            Start services with Ollama + GPU"
+	@echo " $(GREEN)up-no-ollama$(NC)      Start without Ollama (external server)"
+	@echo " $(GREEN)down$(NC)              Stop all services"
+	@echo " $(GREEN)restart$(NC)           Restart services"
+	@echo " $(GREEN)restart-no-ollama$(NC) Restart without Ollama"
+	@echo " $(GREEN)status$(NC)            Show service status"
+	@echo " $(GREEN)health$(NC)            Check agent health"
 	@echo ""
 	@echo "$(YELLOW)AGENT OPERATIONS$(NC)"
 	@echo " $(GREEN)list-agents$(NC)                   List all agents"
@@ -145,39 +150,50 @@ wizard: init-env create-network ## Interactive setup guide
 # ============================================================================
 # Docker Compose Operations
 # ============================================================================
-up: create-network ## Start all services (CPU mode)
-	@echo "$(BLUE)Starting Ollama Agents (CPU mode)...$(NC)"
-	docker compose --profile ollama $(COMPOSE_FILES) up -d
+up: create-network ## Start all services with Ollama (CPU mode)
+	@echo "$(BLUE)Starting Ollama Agents with Ollama service (CPU mode)...$(NC)"
+	$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES) up -d
 	@echo "$(GREEN)Services started$(NC)"
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 10
 	@make status
 
-up-gpu: create-network ## Start all services with GPU support
-	@echo "$(BLUE)Starting Ollama Agents (GPU mode)...$(NC)"
+up-gpu: create-network ## Start all services with Ollama + GPU support
+	@echo "$(BLUE)Starting Ollama Agents with Ollama service (GPU mode)...$(NC)"
 	@echo "$(YELLOW)Requires NVIDIA GPU + nvidia-docker runtime$(NC)"
-	docker compose --profile ollama $(COMPOSE_FILES_GPU) up -d
+	$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES_GPU) up -d
 	@echo "$(GREEN)Services started with GPU$(NC)"
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 10
 	@make status
 
+up-no-ollama: create-network ## Start services WITHOUT Ollama (use external Ollama server)
+	@echo "$(BLUE)Starting Ollama Agents (without Ollama service)...$(NC)"
+	@echo "$(YELLOW)Make sure OLLAMA_HOST in .env points to your external Ollama server$(NC)"
+	$(COMPOSE_CMD) $(COMPOSE_FILES) up -d
+	@echo "$(GREEN)Services started (using external Ollama)$(NC)"
+	@make status
+
 down: ## Stop all services
 	@echo "$(BLUE)Stopping Ollama Agents...$(NC)"
-	docker compose $(COMPOSE_FILES) down
+	$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES) down
 	@echo "$(GREEN)Services stopped$(NC)"
 
-restart: up ## Restart all services (CPU)
-	@echo "$(BLUE)Restarting services...$(NC)"
-	docker compose $(COMPOSE_FILES) restart
+restart: ## Restart all services with Ollama (CPU)
+	@echo "$(BLUE)Restarting services with Ollama...$(NC)"
+	$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES) restart
 
-restart-gpu: up-gpu ## Restart all services (GPU)
-	@echo "$(BLUE)Restarting services (GPU mode)...$(NC)"
-	docker compose $(COMPOSE_FILES_GPU) restart
+restart-gpu: ## Restart all services with Ollama (GPU)
+	@echo "$(BLUE)Restarting services with Ollama (GPU mode)...$(NC)"
+	$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES_GPU) restart
+
+restart-no-ollama: ## Restart services without Ollama
+	@echo "$(BLUE)Restarting services (without Ollama)...$(NC)"
+	$(COMPOSE_CMD) $(COMPOSE_FILES) restart
 
 build: create-network ## Build all services
 	@echo "$(BLUE)Building services...$(NC)"
-	docker compose $(COMPOSE_FILES) build --no-cache
+	$(COMPOSE_CMD) $(COMPOSE_FILES) build --no-cache
 	@echo "$(GREEN)Build complete$(NC)"
 
 # ============================================================================
@@ -240,14 +256,20 @@ init-gpu: init-env create-network build up-gpu ## Full init with GPU support
 # ============================================================================
 # Models & Utils
 # ============================================================================
-pull-models: ## Pull default models
+pull-models: ## Pull default models (requires Ollama service running)
 	@echo "$(BLUE)Pulling Ollama models...$(NC)"
-	docker compose $(COMPOSE_FILES) exec ollama ollama pull llama3.2
-	@echo "$(GREEN)Models pulled$(NC)"
+	@if docker ps | grep -q ollama-engine; then \
+		$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES) exec ollama ollama pull llama3.2; \
+		echo "$(GREEN)Models pulled$(NC)"; \
+	else \
+		echo "$(RED)Error: Ollama service not running$(NC)"; \
+		echo "$(YELLOW)Start with: make up or make up-gpu$(NC)"; \
+		exit 1; \
+	fi
 
 status: ## Show running services
 	@echo "$(BLUE)Service Status:$(NC)"
-	@docker compose $(COMPOSE_FILES) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+	@$(COMPOSE_CMD) $(COMPOSE_FILES) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 health: ## Check health of all services
 	@echo "$(BLUE)╔══════════════════════════════════════════════════════════════╗$(NC)"
@@ -306,7 +328,7 @@ list-agents: ## List all available agents
 logs: ## View logs (usage: make logs [agent=NAME] [follow=true])
 ifndef agent
 	@echo "$(BLUE)Showing logs for all services...$(NC)"
-	@docker compose $(COMPOSE_FILES) logs $(if $(filter true,$(follow)),-f,--tail=100)
+	@$(COMPOSE_CMD) $(COMPOSE_FILES) logs $(if $(filter true,$(follow)),-f,--tail=100)
 else
 	@echo "$(BLUE)Showing logs for agent-$(agent)...$(NC)"
 	@docker logs $(if $(filter true,$(follow)),-f,--tail=100) agent-$(agent)
@@ -433,7 +455,7 @@ clean: ## Remove ALL containers, volumes, networks and data
 	@echo "$(RED)WARNING: This will delete ALL data and the Docker network!$(NC)"
 	@read -p "Type 'yes' to confirm: " confirm; \
 	if [ "$$confirm" = "yes" ]; then \
-		docker compose $(COMPOSE_FILES) down -v --remove-orphans; \
+		$(COMPOSE_CMD_OLLAMA) $(COMPOSE_FILES) down -v --remove-orphans; \
 		make remove-network; \
 		echo "$(GREEN)Full cleanup completed$(NC)"; \
 	else \
