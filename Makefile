@@ -40,8 +40,8 @@ EXAMPLE_COMPOSE_FILES := $(wildcard examples/compose/*.yml)
 RUNTIME_COMPOSE_FILES := $(wildcard runtime/compose/*.yml)
 AGENT_COMPOSE_FILES   := $(EXAMPLE_COMPOSE_FILES) $(RUNTIME_COMPOSE_FILES)
 # Include Ollama service by default (can be omitted if using external Ollama)
-COMPOSE_FILES         := -f docker-compose.yml -f docker-compose.ollama.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
-COMPOSE_FILES_GPU     := -f docker-compose.yml -f docker-compose.ollama.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file)) -f docker-compose.gpu.yml
+COMPOSE_FILES         := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file))
+COMPOSE_FILES_GPU     := -f docker-compose.yml $(foreach file,$(AGENT_COMPOSE_FILES),-f $(file)) -f docker-compose.gpu.yml
 
 # ============================================================================
 # Help
@@ -147,7 +147,7 @@ wizard: init-env create-network ## Interactive setup guide
 # ============================================================================
 up: create-network ## Start all services (CPU mode)
 	@echo "$(BLUE)Starting Ollama Agents (CPU mode)...$(NC)"
-	docker compose $(COMPOSE_FILES) up -d
+	docker compose --profile ollama $(COMPOSE_FILES) up -d
 	@echo "$(GREEN)Services started$(NC)"
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 10
@@ -156,7 +156,7 @@ up: create-network ## Start all services (CPU mode)
 up-gpu: create-network ## Start all services with GPU support
 	@echo "$(BLUE)Starting Ollama Agents (GPU mode)...$(NC)"
 	@echo "$(YELLOW)Requires NVIDIA GPU + nvidia-docker runtime$(NC)"
-	docker compose $(COMPOSE_FILES_GPU) up -d
+	docker compose --profile ollama $(COMPOSE_FILES_GPU) up -d
 	@echo "$(GREEN)Services started with GPU$(NC)"
 	@echo "$(YELLOW)Waiting for Ollama to be ready...$(NC)"
 	@sleep 10
