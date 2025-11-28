@@ -198,6 +198,21 @@ async def health_check():
     }
 
 
+@app.get("/api/config", tags=["system"], summary="Get system configuration")
+async def get_config():
+    """
+    Get system configuration defaults for the frontend.
+    Returns default values from environment variables.
+    """
+    return {
+        "ollama_host": os.getenv("OLLAMA_HOST", "http://ollama:11434"),
+        "default_model": os.getenv("DEFAULT_MODEL", "llama3.2"),
+        "default_temperature": float(os.getenv("DEFAULT_TEMPERATURE", "0.7")),
+        "default_max_tokens": int(os.getenv("DEFAULT_MAX_TOKENS", "4096")),
+        "backoffice_port": int(os.getenv("BACKOFFICE_PORT", "8080"))
+    }
+
+
 @app.get("/api/models", tags=["ollama"], summary="Get available Ollama models")
 async def get_available_models(ollama_host: Optional[str] = None):
     """
@@ -676,34 +691,79 @@ Return ONLY the system prompt itself, ready to use. Do not include explanations 
         import traceback
         ollama_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 
+        # Use configurable model with fallback options
+        # Allow user to specify model via PROMPT_MODEL env var, or try common variations
+        preferred_model = os.getenv("PROMPT_MODEL", None)
+        model_variations = [
+            preferred_model,
+            "llama3.2",
+            "llama3:latest",
+            "llama3.2:latest",
+            "llama3",
+            "llama2"
+        ] if preferred_model else [
+            "llama3.2",
+            "llama3:latest",
+            "llama3.2:latest",
+            "llama3",
+            "llama2"
+        ]
+
         # Use longer timeout for CPU mode (5 minutes) vs GPU (2 minutes)
         # Check for GPU mode via OLLAMA_GPU env var or default to longer timeout
         is_gpu = os.getenv("OLLAMA_GPU", "false").lower() == "true"
         timeout = 120.0 if is_gpu else 300.0
         print(f"Using timeout of {timeout}s for prompt generation ({'GPU' if is_gpu else 'CPU'} mode)")
 
+        last_error = None
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                f"{ollama_host}/api/generate",
-                json={
-                    "model": "llama3.2",
-                    "prompt": meta_prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 2048
-                    }
-                }
-            )
-            response.raise_for_status()
-            result = response.json()
-            generated_prompt = result.get("response", "")
+            # Try each model variation until one works
+            for model in model_variations:
+                if not model:  # Skip None values
+                    continue
 
-            return {
-                "status": "success",
-                "generated_prompt": generated_prompt.strip(),
-                "message": "Prompt generated successfully! Review and edit as needed."
-            }
+                try:
+                    print(f"Attempting prompt generation with model: {model}")
+                    response = await client.post(
+                        f"{ollama_host}/api/generate",
+                        json={
+                            "model": model,
+                            "prompt": meta_prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.7,
+                                "num_predict": 2048
+                            }
+                        }
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    generated_prompt = result.get("response", "")
+
+                    print(f"✓ Successfully generated prompt using model: {model}")
+                    return {
+                        "status": "success",
+                        "generated_prompt": generated_prompt.strip(),
+                        "message": f"Prompt generated successfully using {model}! Review and edit as needed.",
+                        "model_used": model
+                    }
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        print(f"Model '{model}' not found, trying next...")
+                        last_error = e
+                        continue  # Try next model
+                    else:
+                        raise  # Other HTTP errors should be raised
+                except Exception as e:
+                    last_error = e
+                    continue  # Try next model
+
+            # If we get here, none of the models worked
+            raise Exception(
+                f"None of the attempted models are available on {ollama_host}. "
+                f"Tried: {', '.join([m for m in model_variations if m])}. "
+                f"Set PROMPT_MODEL env var to specify a different model, or install one of: llama3.2, llama3"
+            )
 
     except Exception as e:
         # Log the actual error for debugging

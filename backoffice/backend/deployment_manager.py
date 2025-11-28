@@ -160,7 +160,7 @@ class DeploymentManager:
 PORT={port}
 
 # Ollama model to use
-MODEL={model}
+MODEL_NAME={model}
 
 # Model temperature (0.0 = deterministic, 1.0 = creative)
 TEMPERATURE={temperature}

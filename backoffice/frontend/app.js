@@ -294,6 +294,14 @@ const app = {
         currentTab: 'agents'
     },
 
+    // System configuration (loaded from backend)
+    config: {
+        ollama_host: 'http://ollama:11434',  // Default fallback
+        default_model: 'llama3.2',
+        default_temperature: 0.7,
+        default_max_tokens: 4096
+    },
+
     // Edit mode tracking
     editMode: false,
     editingAgentName: null,
@@ -307,14 +315,26 @@ const app = {
     editingWorkflowName: null, // Track if we're editing an existing workflow
 
     // Initialize
-    init() {
+    async init() {
         //console.log('Initializing Backoffice App...');
+        await this.loadConfig();  // Load system config first
         this.setupTabs();
         this.setupForms();
         this.loadModels();  // Load available Ollama models
         this.loadAgents();
         this.loadWorkflows();
         this.loadExecutions();
+    },
+
+    // Load system configuration from backend
+    async loadConfig() {
+        try {
+            const config = await this.apiCall('/config');
+            this.config = config;
+            console.log('System config loaded:', config);
+        } catch (error) {
+            console.error('Failed to load system config, using defaults:', error);
+        }
     },
 
     // Tab Management
@@ -662,6 +682,10 @@ const app = {
         this.editMode = false;
         this.editingAgentName = null;
         document.getElementById('agent-modal-title').textContent = '🤖 Create New Agent';
+
+        // Set default ollama_host from system config
+        document.getElementById('agent-ollama-host').value = this.config.ollama_host;
+
         document.getElementById('create-agent-modal').classList.add('active');
     },
 
