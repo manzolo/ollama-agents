@@ -414,6 +414,9 @@ const app = {
 
             if (!modelSelect) return;
 
+            // Save currently selected value to restore after repopulating
+            const currentlySelected = modelSelect.value;
+
             // Clear existing options
             modelSelect.innerHTML = '';
 
@@ -443,12 +446,23 @@ const app = {
                 });
             }
 
+            // Restore previously selected value if it exists in new options
+            if (currentlySelected) {
+                const optionExists = Array.from(modelSelect.options).some(opt => opt.value === currentlySelected);
+                if (optionExists) {
+                    modelSelect.value = currentlySelected;
+                }
+            }
+
             return data;
         } catch (error) {
             console.error('Error loading models:', error);
             // Use fallback default models on error
             const modelSelect = document.getElementById('agent-model');
             if (modelSelect && modelSelect.options.length === 0) {
+                // Save currently selected value
+                const currentlySelected = modelSelect.value;
+
                 const defaultModels = [
                     { value: 'llama3.2', label: 'llama3.2 (General purpose)' },
                     { value: 'codellama', label: 'codellama (Code-focused)' },
@@ -461,6 +475,14 @@ const app = {
                     option.textContent = model.label;
                     modelSelect.appendChild(option);
                 });
+
+                // Restore selection if possible
+                if (currentlySelected) {
+                    const optionExists = Array.from(modelSelect.options).some(opt => opt.value === currentlySelected);
+                    if (optionExists) {
+                        modelSelect.value = currentlySelected;
+                    }
+                }
             }
             throw error;
         }
