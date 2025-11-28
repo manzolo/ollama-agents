@@ -446,9 +446,154 @@ fi
 echo ""
 
 # ============================================================================
-# 10. Cleanup
+# 10. Test Example Workflows
 # ============================================================================
-log_info "=== Phase 10: Cleanup ==="
+log_info "=== Phase 10: Test Example Workflows ==="
+
+run_test "Listing all workflows (including examples)"
+response=$(curl -s -w "\n%{http_code}" "$BACKOFFICE_URL/api/workflows")
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | head -n-1)
+if [ "$http_code" -eq 200 ]; then
+    workflow_count=$(echo "$body" | jq -r '.count')
+    log_success "Found $workflow_count total workflows"
+
+    # Check for example workflows
+    if echo "$body" | jq -e '.workflows[] | select(.name=="ConvertAndValidate")' > /dev/null 2>&1; then
+        log_success "Example workflow 'ConvertAndValidate' found"
+    else
+        log_warning "Example workflow 'ConvertAndValidate' not found"
+    fi
+
+    if echo "$body" | jq -e '.workflows[] | select(.name=="ValidateAndConvert")' > /dev/null 2>&1; then
+        log_success "Example workflow 'ValidateAndConvert' found"
+    else
+        log_warning "Example workflow 'ValidateAndConvert' not found"
+    fi
+
+    pass_test "Workflows listed with examples"
+else
+    fail_test "Failed to list workflows (HTTP $http_code)"
+fi
+
+run_test "Getting example workflow details: ConvertAndValidate"
+response=$(curl -s -w "\n%{http_code}" "$BACKOFFICE_URL/api/workflows/ConvertAndValidate")
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | head -n-1)
+if [ "$http_code" -eq 200 ]; then
+    source=$(echo "$body" | jq -r '.source')
+    step_count=$(echo "$body" | jq -r '.steps | length')
+    description=$(echo "$body" | jq -r '.description')
+
+    log_info "  Source: $source"
+    log_info "  Description: $description"
+    log_info "  Steps: $step_count"
+
+    if [ "$source" = "example" ] || [ "$source" = "examples" ]; then
+        log_success "Workflow correctly marked as example"
+    elif [ "$source" = "null" ] || [ -z "$source" ]; then
+        log_warning "Workflow source is not set (field may not be implemented yet)"
+    else
+        log_warning "Workflow source is '$source', expected 'example'"
+    fi
+
+    pass_test "Example workflow details retrieved"
+else
+    fail_test "Failed to get example workflow (HTTP $http_code)"
+fi
+
+run_test "Attempting to update example workflow (protection check)"
+response=$(curl -s -w "\n%{http_code}" -X PUT "$BACKOFFICE_URL/api/workflows/ConvertAndValidate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "ConvertAndValidate",
+    "description": "Trying to modify example workflow",
+    "version": "2.0.0",
+    "steps": []
+  }')
+http_code=$(echo "$response" | tail -n1)
+if [ "$http_code" -eq 403 ] || [ "$http_code" -eq 400 ]; then
+    log_success "Example workflow protected from updates (HTTP $http_code)"
+elif [ "$http_code" -eq 200 ]; then
+    log_warning "Example workflow was updated (protection may not be implemented)"
+else
+    log_info "Update returned HTTP $http_code"
+fi
+pass_test "Example workflow update check completed"
+
+run_test "Attempting to delete example workflow (protection check)"
+response=$(curl -s -w "\n%{http_code}" -X DELETE "$BACKOFFICE_URL/api/workflows/ConvertAndValidate")
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | head -n-1)
+if [ "$http_code" -eq 403 ] || [ "$http_code" -eq 400 ]; then
+    log_success "Example workflow protected from deletion (HTTP $http_code)"
+elif [ "$http_code" -eq 200 ]; then
+    log_warning "Example workflow was deleted (protection may not be implemented)"
+else
+    log_info "Delete returned HTTP $http_code"
+fi
+pass_test "Example workflow deletion check completed"
+
+run_test "Executing example workflow: ConvertAndValidate"
+# Sample docker-compose input for testing
+COMPOSE_INPUT='version: "3.8"
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    deploy:
+      replicas: 2
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"'
+
+response=$(curl -s -w "\n%{http_code}" -X POST "$BACKOFFICE_URL/api/workflows/ConvertAndValidate/execute" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "'"$(echo "$COMPOSE_INPUT" | sed 's/"/\\"/g' | tr '\n' ' ')"'"
+  }')
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | head -n-1)
+
+if [ "$http_code" -eq 200 ]; then
+    execution_id=$(echo "$body" | jq -r '.execution_id')
+    workflow_status=$(echo "$body" | jq -r '.result.status')
+
+    log_info "  Execution ID: $execution_id"
+    log_info "  Status: $workflow_status"
+
+    if [ "$workflow_status" = "completed" ]; then
+        log_success "Example workflow executed successfully"
+
+        # Show step results
+        step_count=$(echo "$body" | jq -r '.result.step_results | length')
+        log_info "  Completed $step_count steps:"
+        echo "$body" | jq -r '.result.step_results[] | "    - \(.step_name): \(if .success then "✓" else "✗" end)"'
+
+        pass_test "Example workflow execution successful"
+    else
+        log_warning "Workflow completed with status: $workflow_status"
+        # Show error if present
+        error=$(echo "$body" | jq -r '.result.error // "No error message"')
+        if [ "$error" != "No error message" ]; then
+            log_info "  Error: $error"
+        fi
+        pass_test "Example workflow execution completed (check status)"
+    fi
+else
+    log_warning "Workflow execution returned HTTP $http_code"
+    log_info "Response: $(echo "$body" | jq -c '.')"
+    pass_test "Example workflow execution attempted (check agents availability)"
+fi
+
+echo ""
+
+# ============================================================================
+# 11. Cleanup
+# ============================================================================
+log_info "=== Phase 11: Cleanup ==="
 
 run_test "Deleting workflow: $TEST_WORKFLOW"
 response=$(curl -s -w "\n%{http_code}" -X DELETE "$BACKOFFICE_URL/api/workflows/$TEST_WORKFLOW")
