@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <title>Ollama Agents Backoffice</title>
     <link rel="stylesheet" href="styles.css?v=ea11798">
 </head>
+
 <body>
     <div class="container">
         <!-- Header -->
@@ -72,7 +74,8 @@
                         </div>
                         <div class="form-group">
                             <label for="workflow-input">Input</label>
-                            <textarea id="workflow-input" rows="10" placeholder="Enter input data..." required></textarea>
+                            <textarea id="workflow-input" rows="10" placeholder="Enter input data..."
+                                required></textarea>
                         </div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary">▶ Execute Workflow</button>
@@ -156,12 +159,13 @@
         </div>
     </div>
 
-    <!-- Modal for Create Agent -->
+    <!-- Modal for Create/Edit Agent -->
     <div id="create-agent-modal" class="modal">
         <div class="modal-content modal-content-large">
             <div class="modal-header">
-                <h2>🤖 Create New Agent</h2>
+                <h2 id="agent-modal-title">🤖 Create New Agent</h2>
                 <button onclick="app.hideCreateAgent()" class="btn-close">&times;</button>
+
             </div>
 
             <form id="create-agent-form">
@@ -172,34 +176,33 @@
                         <div class="form-group">
                             <label for="agent-name">Agent Name *</label>
                             <input type="text" id="agent-name" required pattern="^[a-z0-9-]+$"
-                                   placeholder="my-custom-agent"
-                                   title="Use lowercase letters, numbers, and hyphens only">
+                                placeholder="my-custom-agent" title="Use lowercase letters, numbers, and hyphens only">
                             <small>Lowercase letters, numbers, and hyphens only</small>
                         </div>
                         <div class="form-group">
                             <label for="agent-port">Port *</label>
-                            <input type="number" id="agent-port" required min="7000" max="7999"
-                                   placeholder="7003" value="7003">
+                            <input type="number" id="agent-port" required min="7000" max="7999" placeholder="7003"
+                                value="7003">
                             <small>Port 7000-7999</small>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="agent-description">Description *</label>
-                        <input type="text" id="agent-description" required
-                               placeholder="What does this agent do?">
+                        <input type="text" id="agent-description" required placeholder="What does this agent do?">
                     </div>
                 </div>
 
                 <!-- System Prompt Section - Prominent -->
                 <div class="form-section">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h3 class="section-title" style="margin: 0;">💬 System Prompt *</h3>
                         <button type="button" onclick="app.showPromptAssistant()" class="btn btn-primary btn-small">
                             ✨ AI Assistant
                         </button>
                     </div>
                     <textarea id="agent-prompt" class="prompt-textarea" rows="8" required
-                              placeholder="You are a specialized AI agent...">You are a specialized AI agent.
+                        placeholder="You are a specialized AI agent...">You are a specialized AI agent.
 
 ## Your Role and Expertise
 [Describe the agent's area of expertise and primary responsibilities]
@@ -230,20 +233,21 @@ When given input, you must:
                             </div>
                             <div class="form-group">
                                 <label for="agent-max-tokens">Max Tokens</label>
-                                <input type="number" id="agent-max-tokens" min="256" max="32768" step="256" value="4096">
+                                <input type="number" id="agent-max-tokens" min="256" max="32768" step="256"
+                                    value="4096">
                                 <small>Maximum tokens to generate</small>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="agent-temperature">Temperature: <span id="temperature-value">0.7</span></label>
                             <input type="range" id="agent-temperature" min="0" max="1" step="0.1" value="0.7"
-                                   oninput="document.getElementById('temperature-value').textContent = this.value">
+                                oninput="document.getElementById('temperature-value').textContent = this.value">
                             <small>0.0 = Deterministic | 1.0 = Creative</small>
                         </div>
                         <div class="form-group">
                             <label for="agent-capabilities">Capabilities (optional)</label>
                             <input type="text" id="agent-capabilities"
-                                   placeholder="text-analysis, code-generation, translation">
+                                placeholder="text-analysis, code-generation, translation">
                             <small>Comma-separated list of capabilities</small>
                         </div>
                     </div>
@@ -275,25 +279,26 @@ When given input, you must:
                     <div class="form-group">
                         <label for="assistant-purpose">What should this agent do? *</label>
                         <textarea id="assistant-purpose" rows="3" required
-                                  placeholder="e.g., Review code for security vulnerabilities and best practices"></textarea>
+                            placeholder="e.g., Review code for security vulnerabilities and best practices"></textarea>
                     </div>
                     <div class="form-group">
                         <label for="assistant-expertise">What domain expertise should it have?</label>
                         <input type="text" id="assistant-expertise"
-                               placeholder="e.g., Python, JavaScript, security, performance optimization">
+                            placeholder="e.g., Python, JavaScript, security, performance optimization">
                     </div>
                     <div class="form-group">
                         <label for="assistant-input">What format of input will it receive?</label>
                         <input type="text" id="assistant-input"
-                               placeholder="e.g., Source code files, JSON data, plain text">
+                            placeholder="e.g., Source code files, JSON data, plain text">
                     </div>
                     <div class="form-group">
                         <label for="assistant-output">What format should the output be?</label>
                         <input type="text" id="assistant-output"
-                               placeholder="e.g., Markdown report, JSON structure, bullet points">
+                            placeholder="e.g., Markdown report, JSON structure, bullet points">
                     </div>
                     <div class="form-actions">
-                        <button type="button" onclick="app.hidePromptAssistant()" class="btn btn-secondary">Cancel</button>
+                        <button type="button" onclick="app.hidePromptAssistant()"
+                            class="btn btn-secondary">Cancel</button>
                         <button type="submit" class="btn btn-primary">✨ Generate Prompt</button>
                     </div>
                 </form>
@@ -302,8 +307,10 @@ When given input, you must:
             <!-- Result View -->
             <div id="prompt-assistant-result" style="display: none;">
                 <h3 style="margin-bottom: 16px;">Generated Prompt</h3>
-                <div style="background: var(--bg-color); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color);">
-                    <pre id="prompt-assistant-output" style="white-space: pre-wrap; margin: 0; font-size: 14px; line-height: 1.6;"></pre>
+                <div
+                    style="background: var(--bg-color); padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid var(--border-color);">
+                    <pre id="prompt-assistant-output"
+                        style="white-space: pre-wrap; margin: 0; font-size: 14px; line-height: 1.6;"></pre>
                 </div>
                 <div class="form-actions">
                     <button onclick="app.showPromptAssistantForm()" class="btn btn-secondary">← Back to Form</button>
@@ -344,4 +351,5 @@ When given input, you must:
 
     <script src="app.js?v=ea11798"></script>
 </body>
+
 </html>

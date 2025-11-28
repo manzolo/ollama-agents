@@ -82,7 +82,20 @@ class AgentCreateRequest(BaseModel):
     system_prompt: str = Field(..., description="System prompt for the agent")
 
 
+class AgentUpdateRequest(BaseModel):
+    """Request to update an existing agent"""
+    name: str = Field(..., description="Agent name (alphanumeric with hyphens)", pattern="^[a-z0-9-]+$")
+    description: str = Field(..., description="Agent description")
+    port: int = Field(..., description="Port number (7000-7999)", ge=7000, le=7999)
+    model: str = Field("llama3.2", description="Model to use")
+    temperature: float = Field(0.7, description="Temperature (0.0-1.0)", ge=0.0, le=1.0)
+    max_tokens: int = Field(4096, description="Max tokens", ge=256, le=32768)
+    capabilities: List[str] = Field(default_factory=list, description="Agent capabilities")
+    system_prompt: str = Field(..., description="System prompt for the agent")
+
+
 class PromptGenerateRequest(BaseModel):
+
     """Request to generate an agent prompt using AI"""
     agent_purpose: str = Field(..., description="What should this agent do?")
     agent_expertise: str = Field("", description="What domain expertise should it have?")
@@ -450,7 +463,106 @@ async def create_agent(request: AgentCreateRequest):
         )
 
 
+@app.get("/api/agents/{agent_name}/definition", tags=["agents"], summary="Get agent definition for editing")
+async def get_agent_definition_for_edit(agent_name: str):
+    """
+    Get the full agent definition for editing.
+    
+    Returns the agent definition from the YAML file, formatted for the edit form.
+    """
+    try:
+        definition = agent_manager.get_agent_definition(agent_name)
+        if not definition:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent definition '{agent_name}' not found"
+            )
+        
+        # Transform the YAML structure to match the form fields
+        return {
+            "name": definition["agent"]["name"],
+            "description": definition["agent"].get("description", ""),
+            "port": definition["deployment"]["port"],
+            "model": definition["deployment"]["model"],
+            "temperature": definition["deployment"]["temperature"],
+            "max_tokens": definition["deployment"]["max_tokens"],
+            "capabilities": definition.get("capabilities", []),
+            "system_prompt": definition.get("system_prompt", "")
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load agent definition: {str(e)}"
+        )
+
+
+@app.put("/api/agents/{agent_name}", tags=["agents"], summary="Update an existing agent")
+async def update_agent(agent_name: str, request: AgentUpdateRequest):
+    """
+    Update an existing agent definition.
+    
+    This endpoint updates the agent definition file. If the agent is currently
+    deployed, it will need to be redeployed for changes to take effect.
+    
+    Note: The agent name cannot be changed. To rename an agent, create a new one.
+    """
+    # Verify the name matches
+    if agent_name != request.name:
+        raise HTTPException(
+            status_code=400,
+            detail="Agent name in URL must match name in request body"
+        )
+    
+    try:
+        # Check if definition exists
+        existing = agent_manager.get_agent_definition(agent_name)
+        if not existing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent definition '{agent_name}' not found"
+            )
+        
+        # Create updated agent definition
+        agent_def = AgentDefinition(
+            name=request.name,
+            description=request.description,
+            port=request.port,
+            model=request.model,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            capabilities=request.capabilities,
+            system_prompt=request.system_prompt
+        )
+        
+        # Update the definition
+        definition_file = agent_manager.update_agent_definition(agent_def)
+        
+        return {
+            "status": "updated",
+            "agent_name": request.name,
+            "message": f"Agent definition updated successfully!",
+            "details": {
+                "definition_file": definition_file,
+                "port": request.port,
+                "model": request.model
+            },
+            "note": "If the agent is currently deployed, redeploy it for changes to take effect."
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update agent definition: {str(e)}"
+        )
+
+
 @app.delete("/api/agents/definitions/{agent_name}", tags=["agents"], summary="Delete agent definition")
+
 async def delete_agent_definition(agent_name: str):
     """Delete an agent definition"""
     success = agent_manager.delete_agent_definition(agent_name)

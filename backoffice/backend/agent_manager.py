@@ -90,6 +90,18 @@ class AgentManager:
         with open(filepath, "r") as f:
             return yaml.safe_load(f)
 
+    def update_agent_definition(self, agent: AgentDefinition) -> str:
+        """
+        Update an existing agent definition.
+        Returns the filepath of the updated definition.
+        """
+        filepath = self.definitions_dir / f"{agent.name}.yml"
+        if not filepath.exists():
+            raise ValueError(f"Agent definition '{agent.name}' not found")
+        
+        # Save the updated definition (reuse save logic)
+        return self.save_agent_definition(agent)
+
     def delete_agent_definition(self, name: str) -> bool:
         """Delete an agent definition"""
         filepath = self.definitions_dir / f"{name}.yml"

@@ -294,6 +294,10 @@ const app = {
         currentTab: 'agents'
     },
 
+    // Edit mode tracking
+    editMode: false,
+    editingAgentName: null,
+
     // Store step outputs for copying (indexed by step ID)
     stepOutputs: {},
 
@@ -441,6 +445,7 @@ const app = {
                     ${agent.status === 'healthy' ? `
                         <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="app.testAgent('${name}')" class="btn btn-small btn-primary">Test</button>
+                            <button onclick="app.showEditAgent('${name}')" class="btn btn-small btn-secondary" ${isExample ? 'disabled title="Example agents cannot be edited"' : ''}>✏️ Edit</button>
                             <button onclick="app.restartAgent('${name}')" class="btn btn-small btn-secondary">🔄 Restart</button>
                             <button onclick="app.stopAgent('${name}')" class="btn btn-small btn-secondary">⏹ Stop</button>
                             <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
@@ -448,6 +453,7 @@ const app = {
                     ` : agent.status === 'stopped' ? `
                         <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="app.startAgent('${name}')" class="btn btn-small btn-success">▶ Start</button>
+                            <button onclick="app.showEditAgent('${name}')" class="btn btn-small btn-secondary" ${isExample ? 'disabled title="Example agents cannot be edited"' : ''}>✏️ Edit</button>
                             <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
                         </div>
                     ` : agent.status === 'starting' ? `
@@ -502,6 +508,9 @@ const app = {
     },
 
     showCreateAgent() {
+        this.editMode = false;
+        this.editingAgentName = null;
+        document.getElementById('agent-modal-title').textContent = '🤖 Create New Agent';
         document.getElementById('create-agent-modal').classList.add('active');
     },
 
@@ -510,9 +519,52 @@ const app = {
         document.getElementById('create-agent-form').reset();
         // Reset temperature display
         document.getElementById('temperature-value').textContent = '0.7';
+        // Re-enable name field (disabled during edit)
+        document.getElementById('agent-name').disabled = false;
+        // Reset edit mode
+        this.editMode = false;
+        this.editingAgentName = null;
+    },
+
+    async showEditAgent(agentName) {
+        try {
+            // Fetch agent definition
+            const definition = await this.apiCall(`/agents/${agentName}/definition`);
+
+            // Set edit mode
+            this.editMode = true;
+            this.editingAgentName = agentName;
+
+            // Update modal title
+            document.getElementById('agent-modal-title').textContent = '✏️ Edit Agent';
+
+            // Populate form fields
+            document.getElementById('agent-name').value = definition.name;
+            document.getElementById('agent-name').disabled = true; // Can't change name
+            document.getElementById('agent-description').value = definition.description;
+            document.getElementById('agent-port').value = definition.port;
+            document.getElementById('agent-model').value = definition.model;
+            document.getElementById('agent-temperature').value = definition.temperature;
+            document.getElementById('temperature-value').textContent = definition.temperature;
+            document.getElementById('agent-max-tokens').value = definition.max_tokens;
+            document.getElementById('agent-capabilities').value = definition.capabilities.join(', ');
+            document.getElementById('agent-prompt').value = definition.system_prompt;
+
+            // Show modal
+            document.getElementById('create-agent-modal').classList.add('active');
+
+        } catch (error) {
+            Toast.error(`Failed to load agent definition: ${error.message}`);
+        }
     },
 
     async createAgent() {
+        // Check if we're in edit mode
+        if (this.editMode) {
+            await this.updateAgent();
+            return;
+        }
+
         const name = document.getElementById('agent-name').value.trim();
         const description = document.getElementById('agent-description').value.trim();
         const port = parseInt(document.getElementById('agent-port').value);
@@ -569,6 +621,62 @@ const app = {
         } catch (error) {
             // Error already shown by apiCall
             console.error('Agent creation failed:', error);
+        }
+    },
+
+    async updateAgent() {
+        const name = this.editingAgentName;
+        const description = document.getElementById('agent-description').value.trim();
+        const port = parseInt(document.getElementById('agent-port').value);
+        const model = document.getElementById('agent-model').value;
+        const temperature = parseFloat(document.getElementById('agent-temperature').value);
+        const maxTokens = parseInt(document.getElementById('agent-max-tokens').value);
+        const capabilitiesStr = document.getElementById('agent-capabilities').value.trim();
+        const systemPrompt = document.getElementById('agent-prompt').value.trim();
+
+        // Parse capabilities
+        const capabilities = capabilitiesStr
+            ? capabilitiesStr.split(',').map(c => c.trim()).filter(c => c)
+            : [];
+
+        try {
+            const result = await this.apiCall(`/agents/${name}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    name,
+                    description,
+                    port,
+                    model,
+                    temperature,
+                    max_tokens: maxTokens,
+                    capabilities,
+                    system_prompt: systemPrompt
+                })
+            });
+
+            Toast.success(`Agent "${name}" updated successfully!`);
+
+            // Check if agent is deployed
+            const agent = this.state.agents[name];
+            if (agent && (agent.status === 'healthy' || agent.status === 'stopped')) {
+                const redeploy = await Dialog.confirm(
+                    `Agent definition updated!\n\nThe agent is currently deployed. Do you want to redeploy it now to apply the changes?`,
+                    'Redeploy Agent'
+                );
+
+                this.hideCreateAgent();
+
+                if (redeploy) {
+                    await this.deployAgentDefinition(name);
+                }
+            } else {
+                this.hideCreateAgent();
+            }
+
+            this.loadAgents();
+        } catch (error) {
+            // Error already shown by apiCall
+            console.error('Agent update failed:', error);
         }
     },
 
