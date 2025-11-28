@@ -130,17 +130,43 @@ curl -X POST http://localhost:8080/api/plugins/discover
 
 ## Important File Patterns
 
-### Docker Compose Override Pattern
+### Per-Agent Configuration Pattern
 
-Agent compose files use environment variable defaults:
-```yaml
-ports:
-  - "${AGENT_PORT:-7001}:8000"
-environment:
-  - MODEL_NAME=${AGENT_MODEL:-llama3.2}
+Each agent has its own `.env` file alongside its compose file:
+```
+examples/compose/
+├── swarm-converter.yml
+├── .env.swarm-converter    # Agent-specific config (git-tracked)
+runtime/compose/
+├── my-agent.yml
+└── .env.my-agent           # User agent config (gitignored)
 ```
 
-No `.env.agents` file needed - defaults are in the compose files themselves.
+Agent `.env` file format:
+```bash
+PORT=7001
+MODEL=llama3.2
+TEMPERATURE=0.3
+MAX_TOKENS=8192
+OLLAMA_HOST=http://ollama:11434
+AGENT_NAME=swarm-converter
+```
+
+Compose files reference the `.env` file via `env_file` directive:
+```yaml
+services:
+  swarm-converter:
+    env_file:
+      - examples/compose/.env.swarm-converter  # Relative to project root
+    ports:
+      - "7001:8000"  # Hardcoded port mapping
+```
+
+**Key behaviors:**
+- `.env` files are loaded into containers at runtime via `env_file`
+- Port mappings in compose files use actual port numbers (not variables)
+- Example agent configs (in `examples/`) are git-tracked as templates
+- Runtime agent configs (in `runtime/`) are gitignored (user-specific)
 
 ### Volume Mounts
 

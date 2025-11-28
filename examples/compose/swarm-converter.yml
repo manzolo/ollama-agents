@@ -13,20 +13,16 @@ services:
       dockerfile: Dockerfile
     container_name: agent-swarm-converter
     restart: unless-stopped
+    env_file:
+      - examples/compose/.env.swarm-converter
     ports:
-      - "${SWARM_CONVERTER_PORT:-7001}:8000"
+      - "7001:8000"
     volumes:
       - ./agents/swarm-converter/prompt.txt:/app/prompt.txt:ro
       - ./agents/swarm-converter/config.yml:/app/config.yml:ro
       - ./shared/context/swarm-converter:/app/context
     networks:
       - agent-network
-    environment:
-      - AGENT_NAME=swarm-converter
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
-      - MODEL_NAME=${SWARM_CONVERTER_MODEL:-llama3.2}
-      - TEMPERATURE=${SWARM_CONVERTER_TEMPERATURE:-0.7}
-      - MAX_TOKENS=${SWARM_CONVERTER_MAX_TOKENS:-4096}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s

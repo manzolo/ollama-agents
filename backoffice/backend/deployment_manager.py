@@ -126,6 +126,57 @@ class DeploymentManager:
 
         return files
 
+    def _write_agent_env_file(self, agent_name: str, agent_definition: Dict[str, Any]) -> Path:
+        """
+        Write a per-agent .env file with agent-specific configuration.
+
+        Args:
+            agent_name: Name of the agent
+            agent_definition: Agent configuration
+
+        Returns:
+            Path: Path to the created .env file
+        """
+        port = agent_definition["deployment"]["port"]
+        model = agent_definition["deployment"]["model"]
+        temperature = agent_definition["deployment"]["temperature"]
+        max_tokens = agent_definition["deployment"]["max_tokens"]
+        description = agent_definition["agent"]["description"]
+
+        env_content = f'''# ============================================================================
+# AGENT: {agent_name}
+# ============================================================================
+# {description}
+# This file contains environment-specific configuration for the agent.
+# ============================================================================
+
+# Port to expose the agent on
+PORT={port}
+
+# Ollama model to use
+MODEL={model}
+
+# Model temperature (0.0 = deterministic, 1.0 = creative)
+TEMPERATURE={temperature}
+
+# Maximum tokens to generate
+MAX_TOKENS={max_tokens}
+
+# Ollama host URL (can be overridden per agent)
+OLLAMA_HOST=http://ollama:11434
+
+# Agent name (used for logging and identification)
+AGENT_NAME={agent_name}
+'''
+
+        env_path = self.agents_compose_dir / f".env.{agent_name}"
+        with open(env_path, "w") as f:
+            f.write(env_content)
+            f.flush()
+            os.fsync(f.fileno())  # Force write to disk
+
+        return env_path
+
     def _write_agent_compose_file(self, agent_name: str, agent_definition: Dict[str, Any]) -> Path:
         """
         Write a standalone docker-compose file for an agent.
@@ -139,16 +190,11 @@ class DeploymentManager:
         """
         description = agent_definition["agent"]["description"]
         port = agent_definition["deployment"]["port"]
-        model = agent_definition["deployment"]["model"]
-        temperature = agent_definition["deployment"]["temperature"]
-        max_tokens = agent_definition["deployment"]["max_tokens"]
-
-        env_prefix = agent_name.upper().replace("-", "_")
 
         # Create a complete, standalone compose file
         # Use ${HOST_PROJECT_ROOT} variable for volume mounts to allow portability
         # This variable is defined in .env or defaults to $PWD in docker-compose.yml
-        
+
         compose_content = f'''# ==========================================================================
 # AGENT: {agent_name.upper()}
 # ==========================================================================
@@ -164,20 +210,16 @@ services:
       dockerfile: Dockerfile
     container_name: agent-{agent_name}
     restart: unless-stopped
+    env_file:
+      - runtime/compose/.env.{agent_name}
     ports:
-      - "${{{env_prefix}_PORT:-{port}}}:8000"
+      - "{port}:8000"
     volumes:
       - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
       - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/config.yml:/app/config.yml:ro
       - ${{HOST_PROJECT_ROOT}}/shared/context/{agent_name}:/app/context
     networks:
       - agent-network
-    environment:
-      - AGENT_NAME={agent_name}
-      - OLLAMA_HOST=${{OLLAMA_HOST:-http://ollama:11434}}
-      - MODEL_NAME=${{{env_prefix}_MODEL:-{model}}}
-      - TEMPERATURE=${{{env_prefix}_TEMPERATURE:-{temperature}}}
-      - MAX_TOKENS=${{{env_prefix}_MAX_TOKENS:-{max_tokens}}}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
@@ -363,7 +405,7 @@ networks:
 
     def update_docker_compose(self, agent_definition: Dict[str, Any]) -> bool:
         """
-        Create a standalone docker-compose file for the agent.
+        Create a standalone docker-compose file and .env file for the agent.
 
         Args:
             agent_definition: Agent configuration
@@ -373,16 +415,18 @@ networks:
         """
         try:
             agent_name = agent_definition["agent"]["name"]
+            # Create both .env file and compose file
+            self._write_agent_env_file(agent_name, agent_definition)
             self._write_agent_compose_file(agent_name, agent_definition)
             return True
         except Exception as e:
-            print(f"Error creating agent compose file: {e}")
+            print(f"Error creating agent compose/env files: {e}")
             return False
 
     def update_env_file(self, agent_definition: Dict[str, Any]) -> bool:
         """
-        No-op: .env.agents is no longer used.
-        Configuration is embedded in compose files with defaults from plugin.yml.
+        No-op: Per-agent .env files are now created by update_docker_compose().
+        Configuration is stored in per-agent .env files (e.g., .env.agent-name).
 
         Args:
             agent_definition: Agent configuration
@@ -390,7 +434,7 @@ networks:
         Returns:
             bool: Always True (no-op)
         """
-        # No longer needed - compose files have defaults from plugin.yml
+        # No longer needed - per-agent .env files are created by _write_agent_env_file()
         return True
 
     def deploy_agent(self, agent_name: str, agent_definition: Dict[str, Any]) -> Dict[str, Any]:

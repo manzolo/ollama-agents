@@ -13,20 +13,16 @@ services:
       dockerfile: Dockerfile
     container_name: agent-swarm-validator
     restart: unless-stopped
+    env_file:
+      - examples/compose/.env.swarm-validator
     ports:
-      - "${SWARM_VALIDATOR_PORT:-7002}:8000"
+      - "7002:8000"
     volumes:
       - ./agents/swarm-validator/prompt.txt:/app/prompt.txt:ro
       - ./agents/swarm-validator/config.yml:/app/config.yml:ro
       - ./shared/context/swarm-validator:/app/context
     networks:
       - agent-network
-    environment:
-      - AGENT_NAME=swarm-validator
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
-      - MODEL_NAME=${SWARM_VALIDATOR_MODEL:-llama3.2}
-      - TEMPERATURE=${SWARM_VALIDATOR_TEMPERATURE:-0.1}
-      - MAX_TOKENS=${SWARM_VALIDATOR_MAX_TOKENS:-4096}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s

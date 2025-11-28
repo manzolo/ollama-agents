@@ -58,6 +58,9 @@ TODO.txt
 # Runtime - User-created agents and workflows (completely gitignored)
 runtime/
 
+# Per-agent .env files in runtime (gitignored, user-specific)
+runtime/compose/.env.*
+
 # Legacy folders - Deprecated, moved to examples/
 agents/swarm-converter/
 agents/swarm-validator/
