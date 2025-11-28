@@ -278,8 +278,17 @@ health: ## Check health of all services
 	@echo ""
 	@echo "$(YELLOW)Core Services:$(NC)"
 	@printf "  %-25s" "ollama"; \
-		docker inspect ollama-engine --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy && \
-			echo "$(GREEN)✓ healthy$(NC)" || echo "$(RED)✗ unhealthy$(NC)"
+		if docker inspect ollama-engine >/dev/null 2>&1; then \
+			docker inspect ollama-engine --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy && \
+				echo "$(GREEN)✓ healthy (docker)$(NC)" || echo "$(RED)✗ unhealthy (docker)$(NC)"; \
+		else \
+			OLLAMA_HOST=$$(grep "^OLLAMA_HOST=" .env 2>/dev/null | cut -d'=' -f2 | tr -d '"' || echo "http://ollama:11434"); \
+			if curl -sf "$$OLLAMA_HOST/api/tags" >/dev/null 2>&1; then \
+				echo "$(GREEN)✓ healthy (external: $$OLLAMA_HOST)$(NC)"; \
+			else \
+				echo "$(RED)✗ unreachable (external: $$OLLAMA_HOST)$(NC)"; \
+			fi; \
+		fi
 	@printf "  %-25s" "backoffice"; \
 		docker inspect backoffice --format='{{.State.Health.Status}}' 2>/dev/null | grep -q healthy && \
 			echo "$(GREEN)✓ healthy$(NC)" || echo "$(RED)✗ unhealthy$(NC)"
