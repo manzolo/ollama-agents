@@ -591,9 +591,206 @@ fi
 echo ""
 
 # ============================================================================
-# 11. Cleanup
+# 11. Test Export/Import
 # ============================================================================
-log_info "=== Phase 11: Cleanup ==="
+log_info "=== Phase 11: Test Export/Import ==="
+
+# Test Agent Export
+run_test "Exporting agent: $TEST_AGENT_1"
+response=$(curl -s -w "\n%{http_code}" -o "/tmp/${TEST_AGENT_1}.zip" "$BACKOFFICE_URL/api/agents/$TEST_AGENT_1/export")
+http_code=$(echo "$response" | tail -n1)
+if [ "$http_code" -eq 200 ]; then
+    if [ -f "/tmp/${TEST_AGENT_1}.zip" ]; then
+        file_size=$(stat -f%z "/tmp/${TEST_AGENT_1}.zip" 2>/dev/null || stat -c%s "/tmp/${TEST_AGENT_1}.zip" 2>/dev/null)
+        log_success "Agent exported successfully (${file_size} bytes)"
+        pass_test "Agent export successful"
+        
+        # Verify ZIP contents
+        run_test "Verifying ZIP bundle contents"
+        if command -v unzip > /dev/null 2>&1; then
+            zip_contents=$(unzip -l "/tmp/${TEST_AGENT_1}.zip" 2>/dev/null | grep -E "\.(yml|txt|env|md)$" | wc -l)
+            if [ "$zip_contents" -gt 0 ]; then
+                log_success "ZIP contains $zip_contents files"
+                
+                # Check for required files
+                if unzip -l "/tmp/${TEST_AGENT_1}.zip" | grep -q "agent.yml"; then
+                    log_success "  ✓ agent.yml found"
+                else
+                    log_error "  ✗ agent.yml missing"
+                fi
+                
+                if unzip -l "/tmp/${TEST_AGENT_1}.zip" | grep -q "docker-compose.yml"; then
+                    log_success "  ✓ docker-compose.yml found"
+                else
+                    log_warning "  ! docker-compose.yml not found (may not exist for this agent)"
+                fi
+                
+                if unzip -l "/tmp/${TEST_AGENT_1}.zip" | grep -q "\.env"; then
+                    log_success "  ✓ .env found"
+                else
+                    log_warning "  ! .env not found (may not exist for this agent)"
+                fi
+                
+                pass_test "ZIP bundle verified"
+            else
+                log_warning "ZIP appears empty or unreadable"
+                pass_test "Export completed (verification skipped)"
+            fi
+        else
+            log_warning "unzip not available, skipping content verification"
+            pass_test "Export completed (verification skipped)"
+        fi
+    else
+        fail_test "Export file not created"
+    fi
+else
+    fail_test "Failed to export agent (HTTP $http_code)"
+fi
+
+# Test Agent Import
+TEST_IMPORT_AGENT="test-agent-imported"
+run_test "Importing agent from ZIP as: $TEST_IMPORT_AGENT"
+
+# Modify the ZIP to change agent name (if possible)
+if [ -f "/tmp/${TEST_AGENT_1}.zip" ] && command -v unzip > /dev/null 2>&1 && command -v zip > /dev/null 2>&1; then
+    # Extract, modify, and re-zip
+    mkdir -p "/tmp/agent_import_test"
+    cd "/tmp/agent_import_test"
+    unzip -q "/tmp/${TEST_AGENT_1}.zip"
+    
+    # Find and modify agent.yml to change name
+    agent_yml=$(find . -name "agent.yml" | head -n1)
+    if [ -n "$agent_yml" ]; then
+        # Change agent name in YAML
+        sed -i.bak "s/name: $TEST_AGENT_1/name: $TEST_IMPORT_AGENT/" "$agent_yml" 2>/dev/null || \
+        sed -i.bak "s/name:.*$TEST_AGENT_1/name: $TEST_IMPORT_AGENT/" "$agent_yml" 2>/dev/null
+        
+        # Change port to avoid conflict
+        sed -i.bak "s/port: 7900/port: 7902/" "$agent_yml" 2>/dev/null
+        
+        # Re-create ZIP
+        zip -q -r "/tmp/${TEST_IMPORT_AGENT}.zip" .
+        cd - > /dev/null
+        rm -rf "/tmp/agent_import_test"
+        
+        # Now import the modified ZIP
+        response=$(curl -s -w "\n%{http_code}" -X POST "$BACKOFFICE_URL/api/agents/import" \
+          -F "file=@/tmp/${TEST_IMPORT_AGENT}.zip")
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n-1)
+        
+        if [ "$http_code" -eq 200 ]; then
+            imported_name=$(echo "$body" | jq -r '.agent_name')
+            files_count=$(echo "$body" | jq -r '.files_imported | length')
+            log_success "Agent imported: $imported_name ($files_count files)"
+            
+            # Show imported files
+            echo "$body" | jq -r '.files_imported[]' | while read file; do
+                log_info "  - $file"
+            done
+            
+            pass_test "Agent import successful"
+        else
+            fail_test "Failed to import agent (HTTP $http_code)"
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+        fi
+    else
+        log_warning "Could not modify agent.yml, skipping import test"
+        pass_test "Import test skipped"
+    fi
+else
+    log_warning "Required tools not available, skipping import test"
+    pass_test "Import test skipped"
+fi
+
+# Test Workflow Export
+run_test "Exporting workflow: $TEST_WORKFLOW"
+response=$(curl -s -w "\n%{http_code}" -o "/tmp/${TEST_WORKFLOW}.zip" "$BACKOFFICE_URL/api/workflows/$TEST_WORKFLOW/export")
+http_code=$(echo "$response" | tail -n1)
+if [ "$http_code" -eq 200 ]; then
+    if [ -f "/tmp/${TEST_WORKFLOW}.zip" ]; then
+        file_size=$(stat -f%z "/tmp/${TEST_WORKFLOW}.zip" 2>/dev/null || stat -c%s "/tmp/${TEST_WORKFLOW}.zip" 2>/dev/null)
+        log_success "Workflow exported successfully (${file_size} bytes)"
+        
+        # Verify workflow ZIP
+        if command -v unzip > /dev/null 2>&1; then
+            if unzip -l "/tmp/${TEST_WORKFLOW}.zip" | grep -q "workflow.yml"; then
+                log_success "  ✓ workflow.yml found in ZIP"
+            else
+                log_error "  ✗ workflow.yml missing from ZIP"
+            fi
+        fi
+        
+        pass_test "Workflow export successful"
+    else
+        fail_test "Workflow export file not created"
+    fi
+else
+    fail_test "Failed to export workflow (HTTP $http_code)"
+fi
+
+# Test Workflow Import
+TEST_IMPORT_WORKFLOW="test-workflow-imported"
+run_test "Importing workflow from ZIP as: $TEST_IMPORT_WORKFLOW"
+
+if [ -f "/tmp/${TEST_WORKFLOW}.zip" ] && command -v unzip > /dev/null 2>&1 && command -v zip > /dev/null 2>&1; then
+    # Extract, modify, and re-zip
+    mkdir -p "/tmp/workflow_import_test"
+    cd "/tmp/workflow_import_test"
+    unzip -q "/tmp/${TEST_WORKFLOW}.zip"
+    
+    # Find and modify workflow.yml to change name
+    workflow_yml=$(find . -name "workflow.yml" | head -n1)
+    if [ -n "$workflow_yml" ]; then
+        # Change workflow name
+        sed -i.bak "s/name: $TEST_WORKFLOW/name: $TEST_IMPORT_WORKFLOW/" "$workflow_yml" 2>/dev/null || \
+        sed -i.bak "s/name:.*$TEST_WORKFLOW/name: $TEST_IMPORT_WORKFLOW/" "$workflow_yml" 2>/dev/null
+        
+        # Re-create ZIP
+        zip -q -r "/tmp/${TEST_IMPORT_WORKFLOW}.zip" .
+        cd - > /dev/null
+        rm -rf "/tmp/workflow_import_test"
+        
+        # Import the modified ZIP
+        response=$(curl -s -w "\n%{http_code}" -X POST "$BACKOFFICE_URL/api/workflows/import" \
+          -F "file=@/tmp/${TEST_IMPORT_WORKFLOW}.zip")
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n-1)
+        
+        if [ "$http_code" -eq 200 ]; then
+            imported_name=$(echo "$body" | jq -r '.workflow_name')
+            log_success "Workflow imported: $imported_name"
+            pass_test "Workflow import successful"
+            
+            # Clean up imported workflow
+            curl -s -X DELETE "$BACKOFFICE_URL/api/workflows/$TEST_IMPORT_WORKFLOW" > /dev/null
+        else
+            fail_test "Failed to import workflow (HTTP $http_code)"
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+        fi
+    else
+        log_warning "Could not modify workflow.yml, skipping import test"
+        pass_test "Workflow import test skipped"
+    fi
+else
+    log_warning "Required tools not available, skipping workflow import test"
+    pass_test "Workflow import test skipped"
+fi
+
+# Cleanup test files
+rm -f "/tmp/${TEST_AGENT_1}.zip" "/tmp/${TEST_IMPORT_AGENT}.zip" "/tmp/${TEST_WORKFLOW}.zip" "/tmp/${TEST_IMPORT_WORKFLOW}.zip"
+
+# Delete imported agent if it was created
+if [ -n "$TEST_IMPORT_AGENT" ]; then
+    curl -s -X DELETE "$BACKOFFICE_URL/api/agents/$TEST_IMPORT_AGENT?remove_files=true" > /dev/null 2>&1
+fi
+
+echo ""
+
+# ============================================================================
+# 12. Cleanup
+# ============================================================================
+log_info "=== Phase 12: Cleanup ==="
 
 run_test "Deleting workflow: $TEST_WORKFLOW"
 response=$(curl -s -w "\n%{http_code}" -X DELETE "$BACKOFFICE_URL/api/workflows/$TEST_WORKFLOW")

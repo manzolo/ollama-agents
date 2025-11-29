@@ -262,15 +262,46 @@ header p {
     margin-bottom: 10px;
 }
 
+.workflow-card .workflow-header>div {
+    flex: 1;
+    min-width: 0;
+    /* Allow text to shrink */
+}
+
 .workflow-card .workflow-name {
     font-size: 1.2em;
     font-weight: 600;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.workflow-card p {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .workflow-card .workflow-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 15px;
+}
+
+.workflow-card .workflow-actions .btn {
+    flex: 0 1 auto;
+    white-space: nowrap;
+}
+
+/* Responsive workflow actions */
+@media (max-width: 768px) {
+    .workflow-card .workflow-actions {
+        flex-direction: column;
+    }
+
+    .workflow-card .workflow-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 /* Execution Card */
@@ -641,17 +672,35 @@ header p {
 
 /* Code Block */
 pre {
-    background: #1e293b;
-    color: #e2e8f0;
+    background: var(--card-bg);
+    color: var(--text-color);
     padding: 15px;
     border-radius: 6px;
     overflow-x: auto;
     font-size: 0.9em;
     line-height: 1.4;
+    border: 1px solid var(--border-color);
+}
+
+/* Dark mode specific code block styling */
+[data-theme="dark"] pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
 }
 
 code {
     font-family: 'Courier New', Courier, monospace;
+    background: var(--bg-color);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* Code inside pre shouldn't have extra background */
+pre code {
+    background: none;
+    padding: 0;
 }
 
 /* Prompt Textarea - Enhanced styling */
@@ -956,7 +1005,7 @@ code {
     margin-bottom: 20px;
 }
 
-.workflow-builder > label {
+.workflow-builder>label {
     display: block;
     margin-bottom: 12px;
     font-weight: 600;
