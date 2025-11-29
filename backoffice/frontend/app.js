@@ -617,6 +617,7 @@ const app = {
                         <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="app.testAgent('${name}')" class="btn btn-small btn-primary">Test</button>
                             <button onclick="app.showEditAgent('${name}')" class="btn btn-small btn-secondary" ${isExample ? 'disabled title="Example agents cannot be edited"' : ''}>✏️ Edit</button>
+                            <button onclick="app.exportAgent('${name}')" class="btn btn-small btn-secondary" title="Export agent definition">⬇️ Export</button>
                             <button onclick="app.restartAgent('${name}')" class="btn btn-small btn-secondary">🔄 Restart</button>
                             <button onclick="app.stopAgent('${name}')" class="btn btn-small btn-secondary">⏹ Stop</button>
                             <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
@@ -625,6 +626,7 @@ const app = {
                         <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
                             <button onclick="app.startAgent('${name}')" class="btn btn-small btn-success">▶ Start</button>
                             <button onclick="app.showEditAgent('${name}')" class="btn btn-small btn-secondary" ${isExample ? 'disabled title="Example agents cannot be edited"' : ''}>✏️ Edit</button>
+                            <button onclick="app.exportAgent('${name}')" class="btn btn-small btn-secondary" title="Export agent definition">⬇️ Export</button>
                             <button onclick="app.deleteAgent('${name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example agents cannot be deleted"' : ''}>🗑 Delete</button>
                         </div>
                     ` : agent.status === 'starting' ? `
@@ -1054,6 +1056,221 @@ const app = {
         await this.generatePrompt();
     },
 
+    // Import/Export Functions
+    async exportAgent(agentName) {
+        window.location.href = `${API_BASE}/agents/${agentName}/export`;
+    },
+
+    async importAgent() {
+        // Trigger file input
+        document.getElementById('import-agent-file').click();
+    },
+
+    async handleAgentImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Show loading indicator
+        Toast.info(`Importing ${file.name}...`);
+
+        try {
+            const response = await fetch(`${API_BASE}/agents/import`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.status === 409) {
+                const overwrite = await Dialog.confirm(
+                    `Agent already exists. Do you want to overwrite it?`,
+                    'Overwrite Agent'
+                );
+
+                if (overwrite) {
+                    formData.append('overwrite', 'true');
+                    Toast.info(`Importing with overwrite...`);
+
+                    const retryResponse = await fetch(`${API_BASE}/agents/import`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!retryResponse.ok) {
+                        let errorMsg;
+                        try {
+                            const error = await retryResponse.json();
+                            errorMsg = error.detail || error.message || 'Import failed';
+                        } catch {
+                            errorMsg = await retryResponse.text() || 'Import failed';
+                        }
+                        console.error('Import error:', errorMsg);
+                        throw new Error(errorMsg);
+                    }
+
+                    const result = await retryResponse.json();
+
+                    // Show detailed success message
+                    const filesImported = result.files_imported || [];
+                    const detailMsg = filesImported.length > 0
+                        ? `\n\nFiles imported:\n${filesImported.map(f => `• ${f}`).join('\n')}`
+                        : '';
+
+                    Toast.success(`Agent "${result.agent_name}" imported successfully!${detailMsg}`);
+
+                    if (result.note) {
+                        Toast.info(result.note);
+                    }
+
+                    // Reload agents list
+                    this.loadAgents();
+                    this.loadAgentDefinitions();
+
+                    // Ask if user wants to deploy immediately
+                    const deployNow = await Dialog.confirm(
+                        `Agent "${result.agent_name}" imported successfully!\n\nDo you want to deploy it now?`,
+                        'Deploy Agent'
+                    );
+
+                    if (deployNow) {
+                        await this.deployAgentDefinition(result.agent_name);
+                    }
+
+                    return;
+                } else {
+                    return; // User cancelled
+                }
+            }
+
+            if (!response.ok) {
+                let errorMsg;
+                try {
+                    const error = await response.json();
+                    errorMsg = error.detail || error.message || 'Import failed';
+                } catch {
+                    errorMsg = await response.text() || `Import failed with status ${response.status}`;
+                }
+                console.error('Import error:', errorMsg);
+                throw new Error(errorMsg);
+            }
+
+            const result = await response.json();
+
+            // Show detailed success message
+            const filesImported = result.files_imported || [];
+            const detailMsg = filesImported.length > 0
+                ? `\n\nFiles imported:\n${filesImported.map(f => `• ${f}`).join('\n')}`
+                : '';
+
+            Toast.success(`Agent "${result.agent_name}" imported successfully!${detailMsg}`);
+
+            if (result.note) {
+                Toast.info(result.note);
+            }
+
+            // Reload agents list
+            this.loadAgents();
+            this.loadAgentDefinitions();
+
+            // Ask if user wants to deploy immediately
+            const deployNow = await Dialog.confirm(
+                `Agent "${result.agent_name}" imported successfully!\n\nDo you want to deploy it now?`,
+                'Deploy Agent'
+            );
+
+            if (deployNow) {
+                await this.deployAgentDefinition(result.agent_name);
+            }
+
+        } catch (error) {
+            console.error('Import failed:', error);
+            Toast.error(`Import failed: ${error.message}`);
+        } finally {
+            // Reset input
+            event.target.value = '';
+        }
+    },
+
+    async exportWorkflow(workflowName) {
+        window.location.href = `${API_BASE}/workflows/${workflowName}/export`;
+    },
+
+    async importWorkflow() {
+        document.getElementById('import-workflow-file').click();
+    },
+
+    async handleWorkflowImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch(`${API_BASE}/workflows/import`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.status === 409) {
+                const overwrite = await Dialog.confirm(
+                    `Workflow already exists. Do you want to overwrite it?`,
+                    'Overwrite Workflow'
+                );
+
+                if (overwrite) {
+                    formData.append('overwrite', 'true');
+                    const retryResponse = await fetch(`${API_BASE}/workflows/import`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!retryResponse.ok) {
+                        const error = await retryResponse.json();
+                        throw new Error(error.detail || 'Import failed');
+                    }
+
+                    const result = await retryResponse.json();
+
+                    // Show detailed success message
+                    const filesImported = result.files_imported || [];
+                    const detailMsg = filesImported.length > 0
+                        ? `\n\nFiles imported:\n${filesImported.map(f => `• ${f}`).join('\n')}`
+                        : '';
+
+                    Toast.success(`Workflow "${result.workflow_name}" imported successfully!${detailMsg}`);
+                    this.loadWorkflows();
+                    return;
+                } else {
+                    return;
+                }
+            }
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Import failed');
+            }
+
+            const result = await response.json();
+
+            // Show detailed success message
+            const filesImported = result.files_imported || [];
+            const detailMsg = filesImported.length > 0
+                ? `\n\nFiles imported:\n${filesImported.map(f => `• ${f}`).join('\n')}`
+                : '';
+
+            Toast.success(`Workflow "${result.workflow_name}" imported successfully!${detailMsg}`);
+            this.loadWorkflows();
+
+        } catch (error) {
+            console.error('Import failed:', error);
+            Toast.error(`Import failed: ${error.message}`);
+        } finally {
+            event.target.value = '';
+        }
+    },
+
     // Workflows
     async loadWorkflows() {
         const container = document.getElementById('workflows-list');
@@ -1093,6 +1310,7 @@ const app = {
                 <div class="workflow-actions">
                     <button onclick="app.viewWorkflow('${workflow.name}')" class="btn btn-small btn-primary">View</button>
                     <button onclick="app.editWorkflow('${workflow.name}')" class="btn btn-small btn-secondary">✏️ Edit</button>
+                    <button onclick="app.exportWorkflow('${workflow.name}')" class="btn btn-small btn-secondary" title="Export workflow definition">⬇️ Export</button>
                     <button onclick="app.runWorkflow('${workflow.name}')" class="btn btn-small btn-success">Run</button>
                     <button onclick="app.deleteWorkflow('${workflow.name}')" class="btn btn-small btn-danger" ${isExample ? 'disabled title="Example workflows cannot be deleted"' : ''}>Delete</button>
                 </div>

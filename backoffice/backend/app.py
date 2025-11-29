@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -1272,8 +1272,563 @@ async def shutdown_event():
 # Static Files (Frontend)
 # ============================================================================
 
+# Serve frontend static files (CSS, JS, etc.) but not HTML to avoid intercepting API routes
+# The root endpoint at "/" already handles serving index.html
 if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    # Mount static files at /static to avoid conflicts with API routes
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+
+# ============================================================================
+# ============================================================================
+# Import/Export Endpoints
+# ============================================================================
+
+@app.get("/api/agents/{agent_name}/export", tags=["agents"], summary="Export agent as ZIP bundle")
+async def export_agent(agent_name: str):
+    """
+    Export a complete agent bundle as a ZIP file containing:
+    - Agent definition YAML
+    - Docker compose service definition
+    - Environment file
+    - Agent-specific files (prompt.txt, config.yml, etc.)
+    - Plugin manifest (if exists)
+    """
+    import tempfile
+    import zipfile
+    import shutil
+    from pathlib import Path as PathlibPath
+    
+    # Get agent definition
+    definition = agent_manager.get_agent_definition(agent_name)
+    if not definition:
+        debug_info = f"Looking in: {agent_manager.definitions_dir}. Files found: {[f.name for f in agent_manager.definitions_dir.glob('*.yml')]}"
+        print(f"DEBUG: {debug_info}")
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found. {debug_info}")
+
+    # Create temporary directory for bundle
+    temp_dir = tempfile.mkdtemp(prefix=f"agent_export_{agent_name}_")
+    zip_path = None
+    
+    try:
+        bundle_dir = PathlibPath(temp_dir) / agent_name
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Save agent definition YAML
+        agent_def_content = yaml.dump(definition, default_flow_style=False, sort_keys=False)
+        (bundle_dir / "agent.yml").write_text(agent_def_content)
+        
+        # 2. Find and copy docker-compose service definition
+        compose_paths = [
+            PROJECT_ROOT / "runtime" / "compose" / f"{agent_name}.yml",
+            PROJECT_ROOT / "examples" / "compose" / f"{agent_name}.yml"
+        ]
+        for compose_path in compose_paths:
+            if compose_path.exists():
+                shutil.copy2(compose_path, bundle_dir / "docker-compose.yml")
+                break
+        
+        # 3. Find and copy environment file
+        env_paths = [
+            PROJECT_ROOT / "runtime" / "compose" / f".env.{agent_name}",
+            PROJECT_ROOT / "examples" / "compose" / f".env.{agent_name}"
+        ]
+        for env_path in env_paths:
+            if env_path.exists():
+                shutil.copy2(env_path, bundle_dir / ".env")
+                break
+        
+        # 4. Copy agent-specific files from agent directory
+        agent_dir_paths = [
+            PROJECT_ROOT / "agents" / agent_name,
+            PROJECT_ROOT / "runtime" / "agents" / agent_name,
+            PROJECT_ROOT / "examples" / "agents" / agent_name
+        ]
+        
+        for agent_dir in agent_dir_paths:
+            if agent_dir.exists() and agent_dir.is_dir():
+                # Copy all files from agent directory
+                for item in agent_dir.iterdir():
+                    if item.is_file():
+                        shutil.copy2(item, bundle_dir / item.name)
+                break
+        
+        # 5. Create README with import instructions
+        readme_content = f"""# Agent Bundle: {agent_name}
+
+This bundle contains all files needed to deploy the '{agent_name}' agent.
+
+## Contents
+
+- `agent.yml` - Agent definition
+- `docker-compose.yml` - Docker service configuration (if available)
+- `.env` - Environment variables (if available)
+- Additional agent-specific files (prompt.txt, config.yml, plugin.yml, etc.)
+
+## Import Instructions
+
+1. Go to the Backoffice UI
+2. Navigate to the Agents tab
+3. Click "Import Agent"
+4. Select this ZIP file
+5. Choose whether to overwrite if the agent already exists
+6. Deploy the agent after import
+
+## Manual Import
+
+Alternatively, you can manually extract this bundle:
+
+1. Extract to `runtime/agents/{agent_name}/`
+2. Copy `agent.yml` to `runtime/agent-definitions/{agent_name}.yml`
+3. Copy `docker-compose.yml` to `runtime/compose/{agent_name}.yml`
+4. Copy `.env` to `runtime/compose/.env.{agent_name}`
+5. Use the backoffice to deploy the agent
+
+---
+Exported: {datetime.now().isoformat()}
+"""
+        (bundle_dir / "README.md").write_text(readme_content)
+        
+        # Create ZIP archive
+        zip_path = PathlibPath(temp_dir) / f"{agent_name}.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in bundle_dir.rglob('*'):
+                if file_path.is_file():
+                    arcname = file_path.relative_to(bundle_dir.parent)
+                    zipf.write(file_path, arcname)
+        
+        # Return ZIP file
+        return FileResponse(
+            path=str(zip_path),
+            media_type="application/zip",
+            filename=f"{agent_name}.zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={agent_name}.zip"
+            }
+        )
+    
+    except Exception as e:
+        # Clean up on error
+        if temp_dir and PathlibPath(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+    
+    finally:
+        # Note: We can't clean up temp_dir here because FileResponse needs the file
+        # The file will be cleaned up by the OS eventually
+        pass
+
+
+@app.post("/api/agents/import", tags=["agents"], summary="Import agent from ZIP bundle")
+async def import_agent(
+    file: UploadFile = File(...),
+    overwrite: bool = Form(False)
+):
+    """
+    Import a complete agent bundle from a ZIP file.
+    Extracts and validates all files, then creates the agent structure.
+    """
+    import tempfile
+    import zipfile
+    import shutil
+    from pathlib import Path as PathlibPath
+    
+    # Validate file type
+    if not file.filename.endswith('.zip'):
+        # Try to support legacy YAML imports
+        if file.filename.endswith('.yml') or file.filename.endswith('.yaml'):
+            try:
+                content = await file.read()
+                definition = yaml.safe_load(content)
+
+                # Basic validation
+                if "agent" not in definition or "name" not in definition["agent"]:
+                    raise HTTPException(status_code=400, detail="Invalid agent definition: missing agent name")
+
+                agent_name = definition["agent"]["name"]
+                
+                # Check if exists
+                existing = agent_manager.get_agent_definition(agent_name)
+                if existing and not overwrite:
+                    raise HTTPException(
+                        status_code=409, 
+                        detail=f"Agent '{agent_name}' already exists. Set overwrite=true to replace."
+                    )
+
+                # Save definition (legacy YAML-only import)
+                filepath = agent_manager.definitions_dir / f"{agent_name}.yml"
+                with open(filepath, "w") as f:
+                    yaml.dump(definition, f, default_flow_style=False, sort_keys=False)
+
+                return {
+                    "status": "success",
+                    "message": f"Agent '{agent_name}' imported successfully (YAML only - no additional files)",
+                    "agent_name": agent_name,
+                    "files_imported": ["agent.yml"]
+                }
+
+            except yaml.YAMLError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid YAML file: {str(e)}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        else:
+            raise HTTPException(status_code=400, detail="File must be a ZIP bundle or YAML file")
+    
+    # Create temporary directory for extraction
+    temp_dir = tempfile.mkdtemp(prefix="agent_import_")
+    
+    try:
+        # Save uploaded file
+        zip_path = PathlibPath(temp_dir) / file.filename
+        with open(zip_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Validate ZIP file size (max 50MB)
+        if zip_path.stat().st_size > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="ZIP file too large (max 50MB)")
+        
+        # Extract ZIP
+        extract_dir = PathlibPath(temp_dir) / "extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            # Validate ZIP structure - prevent path traversal
+            for member in zipf.namelist():
+                if member.startswith('/') or '..' in member:
+                    raise HTTPException(status_code=400, detail=f"Invalid ZIP structure: unsafe path '{member}'")
+            
+            zipf.extractall(extract_dir)
+        
+        # Find agent.yml in extracted files
+        agent_yml_candidates = list(extract_dir.rglob("agent.yml"))
+        if not agent_yml_candidates:
+            raise HTTPException(status_code=400, detail="Invalid bundle: agent.yml not found")
+        
+        agent_yml_path = agent_yml_candidates[0]
+        bundle_root = agent_yml_path.parent
+        
+        # Load and validate agent definition
+        with open(agent_yml_path, 'r') as f:
+            definition = yaml.safe_load(f)
+        
+        if "agent" not in definition or "name" not in definition["agent"]:
+            raise HTTPException(status_code=400, detail="Invalid agent definition: missing agent name")
+        
+        agent_name = definition["agent"]["name"]
+        
+        # Sanitize agent name to prevent path injection
+        if not agent_name.replace('-', '').replace('_', '').isalnum():
+            raise HTTPException(status_code=400, detail=f"Invalid agent name: '{agent_name}' contains unsafe characters")
+        
+        # Check if exists
+        existing = agent_manager.get_agent_definition(agent_name)
+        if existing and not overwrite:
+            raise HTTPException(
+                status_code=409, 
+                detail=f"Agent '{agent_name}' already exists. Set overwrite=true to replace."
+            )
+        
+        # Track imported files
+        imported_files = []
+        
+        # 1. Create agent directory structure
+        runtime_agent_dir = PROJECT_ROOT / "runtime" / "agents" / agent_name
+        runtime_agent_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 2. Copy agent-specific files to agent directory
+        for item in bundle_root.iterdir():
+            if item.is_file() and item.name not in ["agent.yml", "docker-compose.yml", ".env", "README.md"]:
+                dest = runtime_agent_dir / item.name
+                shutil.copy2(item, dest)
+                imported_files.append(f"agents/{agent_name}/{item.name}")
+        
+        # 3. Save agent definition
+        agent_def_path = PROJECT_ROOT / "runtime" / "agent-definitions" / f"{agent_name}.yml"
+        agent_def_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(agent_yml_path, agent_def_path)
+        imported_files.append(f"agent-definitions/{agent_name}.yml")
+        
+        # 4. Save docker-compose service definition if exists
+        compose_file = bundle_root / "docker-compose.yml"
+        if compose_file.exists():
+            compose_dest = PROJECT_ROOT / "runtime" / "compose" / f"{agent_name}.yml"
+            compose_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(compose_file, compose_dest)
+            imported_files.append(f"compose/{agent_name}.yml")
+        
+        # 5. Save environment file if exists
+        env_file = bundle_root / ".env"
+        if env_file.exists():
+            env_dest = PROJECT_ROOT / "runtime" / "compose" / f".env.{agent_name}"
+            shutil.copy2(env_file, env_dest)
+            imported_files.append(f"compose/.env.{agent_name}")
+        
+        return {
+            "status": "success",
+            "message": f"Agent '{agent_name}' imported successfully",
+            "agent_name": agent_name,
+            "files_imported": imported_files,
+            "note": "Agent definition imported. Use the Deploy button to start the agent."
+        }
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid ZIP file")
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML in bundle: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    
+    finally:
+        # Clean up temporary directory
+        if temp_dir and PathlibPath(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.get("/api/workflows/{workflow_name}/export", tags=["workflows"], summary="Export workflow as ZIP bundle")
+async def export_workflow(workflow_name: str):
+    """
+    Export a workflow bundle as a ZIP file containing:
+    - Workflow definition YAML
+    - README with import instructions
+    """
+    import tempfile
+    import zipfile
+    import shutil
+    from pathlib import Path as PathlibPath
+    
+    workflow = workflow_manager.load_workflow(workflow_name)
+    if not workflow:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
+
+    # Create temporary directory for bundle
+    temp_dir = tempfile.mkdtemp(prefix=f"workflow_export_{workflow_name}_")
+    
+    try:
+        bundle_dir = PathlibPath(temp_dir) / workflow_name
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Get workflow YAML content
+        filepath = workflow_manager.workflows_dir / f"{workflow_name}.yml"
+        if not filepath.exists() and workflow_manager.examples_dir:
+            filepath = workflow_manager.examples_dir / f"{workflow_name}.yml"
+        
+        if filepath.exists():
+            with open(filepath, "r") as f:
+                yaml_content = f.read()
+        else:
+            # Fallback: construct from object
+            data = {
+                "name": workflow.name,
+                "description": workflow.description,
+                "version": workflow.version,
+                "steps": [
+                    {
+                        "name": step.name,
+                        "agent": step.agent,
+                        "input": step.input_source,
+                    } for step in workflow.steps
+                ]
+            }
+            yaml_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        
+        # Save workflow YAML
+        (bundle_dir / "workflow.yml").write_text(yaml_content)
+        
+        # 2. Create README with import instructions
+        readme_content = f"""# Workflow Bundle: {workflow_name}
+
+This bundle contains the workflow definition for '{workflow_name}'.
+
+## Contents
+
+- `workflow.yml` - Workflow definition
+
+## Import Instructions
+
+1. Go to the Backoffice UI
+2. Navigate to the Workflows tab
+3. Click "Import Workflow"
+4. Select this ZIP file
+5. Choose whether to overwrite if the workflow already exists
+6. Execute the workflow from the Execute tab
+
+## Manual Import
+
+Alternatively, you can manually extract this bundle:
+
+1. Extract to `runtime/workflows/{workflow_name}.yml`
+2. Reload workflows in the backoffice
+
+---
+Exported: {datetime.now().isoformat()}
+"""
+        (bundle_dir / "README.md").write_text(readme_content)
+        
+        # Create ZIP archive
+        zip_path = PathlibPath(temp_dir) / f"{workflow_name}.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in bundle_dir.rglob('*'):
+                if file_path.is_file():
+                    arcname = file_path.relative_to(bundle_dir.parent)
+                    zipf.write(file_path, arcname)
+        
+        # Return ZIP file
+        return FileResponse(
+            path=str(zip_path),
+            media_type="application/zip",
+            filename=f"{workflow_name}.zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={workflow_name}.zip"
+            }
+        )
+    
+    except Exception as e:
+        # Clean up on error
+        if temp_dir and PathlibPath(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@app.post("/api/workflows/import", tags=["workflows"], summary="Import workflow from ZIP bundle")
+async def import_workflow(
+    file: UploadFile = File(...),
+    overwrite: bool = Form(False)
+):
+    """
+    Import a workflow bundle from a ZIP file.
+    """
+    import tempfile
+    import zipfile
+    import shutil
+    from pathlib import Path as PathlibPath
+    
+    # Validate file type
+    if not file.filename.endswith('.zip'):
+        # Try to support legacy YAML imports
+        if file.filename.endswith('.yml') or file.filename.endswith('.yaml'):
+            try:
+                content = await file.read()
+                definition = yaml.safe_load(content)
+
+                # Basic validation
+                if "name" not in definition or "steps" not in definition:
+                    raise HTTPException(status_code=400, detail="Invalid workflow definition: missing name or steps")
+
+                workflow_name = definition["name"]
+                
+                # Check if exists
+                existing_path = workflow_manager.workflows_dir / f"{workflow_name}.yml"
+                if existing_path.exists() and not overwrite:
+                    raise HTTPException(
+                        status_code=409, 
+                        detail=f"Workflow '{workflow_name}' already exists. Set overwrite=true to replace."
+                    )
+
+                # Save using manager (legacy YAML-only import)
+                workflow_manager.save_workflow(definition)
+
+                return {
+                    "status": "success",
+                    "message": f"Workflow '{workflow_name}' imported successfully (YAML only)",
+                    "workflow_name": workflow_name,
+                    "files_imported": ["workflow.yml"]
+                }
+
+            except yaml.YAMLError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid YAML file: {str(e)}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        else:
+            raise HTTPException(status_code=400, detail="File must be a ZIP bundle or YAML file")
+    
+    # Create temporary directory for extraction
+    temp_dir = tempfile.mkdtemp(prefix="workflow_import_")
+    
+    try:
+        # Save uploaded file
+        zip_path = PathlibPath(temp_dir) / file.filename
+        with open(zip_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Validate ZIP file size (max 50MB)
+        if zip_path.stat().st_size > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="ZIP file too large (max 50MB)")
+        
+        # Extract ZIP
+        extract_dir = PathlibPath(temp_dir) / "extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            # Validate ZIP structure - prevent path traversal
+            for member in zipf.namelist():
+                if member.startswith('/') or '..' in member:
+                    raise HTTPException(status_code=400, detail=f"Invalid ZIP structure: unsafe path '{member}'")
+            
+            zipf.extractall(extract_dir)
+        
+        # Find workflow.yml in extracted files
+        workflow_yml_candidates = list(extract_dir.rglob("workflow.yml"))
+        if not workflow_yml_candidates:
+            raise HTTPException(status_code=400, detail="Invalid bundle: workflow.yml not found")
+        
+        workflow_yml_path = workflow_yml_candidates[0]
+        
+        # Load and validate workflow definition
+        with open(workflow_yml_path, 'r') as f:
+            definition = yaml.safe_load(f)
+        
+        if "name" not in definition or "steps" not in definition:
+            raise HTTPException(status_code=400, detail="Invalid workflow definition: missing name or steps")
+        
+        workflow_name = definition["name"]
+        
+        # Sanitize workflow name
+        if not workflow_name.replace('-', '').replace('_', '').isalnum():
+            raise HTTPException(status_code=400, detail=f"Invalid workflow name: '{workflow_name}' contains unsafe characters")
+        
+        # Check if exists
+        existing_path = workflow_manager.workflows_dir / f"{workflow_name}.yml"
+        if existing_path.exists() and not overwrite:
+            raise HTTPException(
+                status_code=409, 
+                detail=f"Workflow '{workflow_name}' already exists. Set overwrite=true to replace."
+            )
+        
+        # Save using manager
+        workflow_manager.save_workflow(definition)
+        
+        return {
+            "status": "success",
+            "message": f"Workflow '{workflow_name}' imported successfully",
+            "workflow_name": workflow_name,
+            "files_imported": [f"workflows/{workflow_name}.yml"]
+        }
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid ZIP file")
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML in bundle: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    
+    finally:
+        # Clean up temporary directory
+        if temp_dir and PathlibPath(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 # ============================================================================

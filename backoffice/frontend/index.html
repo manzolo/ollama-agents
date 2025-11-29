@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Cache busting: Update version when CSS/JS changes -->
-    <meta name="app-version" content="a3e27e4">
+    <meta name="app-version" content="4c72066">
     <title>Ollama Agents Backoffice</title>
-    <link rel="stylesheet" href="styles.css?v=a3e27e4">
+    <link rel="stylesheet" href="/static/styles.css?v=4c72066">
 </head>
 
 <body>
@@ -37,6 +37,7 @@
                     <h2>Available Agents</h2>
                     <div>
                         <button onclick="app.loadAgents()" class="btn btn-secondary">🔄 Refresh</button>
+                        <button onclick="app.importAgent()" class="btn btn-secondary">📥 Import</button>
                         <button onclick="app.showCreateAgent()" class="btn btn-primary">➕ Create Agent</button>
                     </div>
                 </div>
@@ -51,6 +52,7 @@
                     <h2>Workflows</h2>
                     <div>
                         <button onclick="app.loadWorkflows()" class="btn btn-secondary">🔄 Refresh</button>
+                        <button onclick="app.importWorkflow()" class="btn btn-secondary">📥 Import</button>
                         <button onclick="app.showCreateWorkflow()" class="btn btn-primary">➕ Create</button>
                     </div>
                 </div>
@@ -224,17 +226,15 @@ When given input, you must:
                         <div class="form-group">
                             <label for="agent-ollama-host">Ollama Host</label>
                             <div style="display: flex; gap: 8px;">
-                                <input type="text" id="agent-ollama-host"
-                                    placeholder="http://ollama:11434"
-                                    value="http://ollama:11434"
-                                    style="flex: 1;">
+                                <input type="text" id="agent-ollama-host" placeholder="http://ollama:11434"
+                                    value="http://ollama:11434" style="flex: 1;">
                                 <button type="button" id="test-connection-btn" class="btn btn-secondary"
-                                    onclick="app.testOllamaConnection()"
-                                    style="white-space: nowrap;">
+                                    onclick="app.testOllamaConnection()" style="white-space: nowrap;">
                                     🔌 Test Connection
                                 </button>
                             </div>
-                            <small>Ollama server URL for this agent (e.g., http://ollama:11434, http://192.168.1.100:11434)</small>
+                            <small>Ollama server URL for this agent (e.g., http://ollama:11434,
+                                http://192.168.1.100:11434)</small>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
@@ -362,7 +362,13 @@ When given input, you must:
         </div>
     </div>
 
-    <script src="app.js?v=a3e27e4"></script>
+    <!-- Hidden File Inputs for Import -->
+    <input type="file" id="import-agent-file" accept=".zip,.yml,.yaml" style="display: none;"
+        onchange="app.handleAgentImport(event)">
+    <input type="file" id="import-workflow-file" accept=".zip,.yml,.yaml" style="display: none;"
+        onchange="app.handleWorkflowImport(event)">
+
+    <script src="/static/app.js?v=4c72066"></script>
 </body>
 
 </html>
