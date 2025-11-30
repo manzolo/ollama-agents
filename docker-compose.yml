@@ -44,6 +44,8 @@ services:
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-$PWD}
       # Ollama connection (configurable - can use external host)
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      # Propagate network name for agent deployment
+      - DOCKER_NETWORK_NAME=${DOCKER_NETWORK_NAME:-ollama-agent-network}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
