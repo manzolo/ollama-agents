@@ -617,6 +617,7 @@ async def update_agent(agent_name: str, request: AgentUpdateRequest):
             name=request.name,
             description=request.description,
             port=request.port,
+            ollama_host=request.ollama_host,
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
