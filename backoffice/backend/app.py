@@ -39,8 +39,13 @@ WORKFLOWS_EXAMPLES_DIR = Path(os.getenv("WORKFLOWS_EXAMPLES_DIR", "/app/examples
 EXAMPLES_DIR = Path(os.getenv("EXAMPLES_DIR", "/app/examples"))
 
 # Other paths
+# Other paths
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", "/app/frontend"))
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "/project"))
+
+# Detect standalone mode
+STANDALONE_MODE = os.getenv("STANDALONE_MODE", "false").lower() == "true"
+DEFAULT_PROJECT_ROOT = "/app" if STANDALONE_MODE else "/project"
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", DEFAULT_PROJECT_ROOT))
 
 # Initialize Plugin Registry (replaces static AGENT_REGISTRY)
 plugin_registry = PluginRegistry(PROJECT_ROOT)

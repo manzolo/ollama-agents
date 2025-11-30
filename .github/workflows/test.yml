@@ -28,11 +28,10 @@ jobs:
 
       - name: Create required directories
         run: |
-          mkdir -p shared/context/swarm-converter
-          mkdir -p shared/context/swarm-validator
-          mkdir -p backoffice/workflows
           mkdir -p runtime/agents
           mkdir -p runtime/compose
+          mkdir -p runtime/context/swarm-converter
+          mkdir -p runtime/context/swarm-validator
           docker network create ollama-agent-network
 
       - name: Build services

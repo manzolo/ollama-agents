@@ -26,24 +26,17 @@ services:
   # ==========================================================================
   backoffice:
     build:
-      context: ./backoffice
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backoffice/Dockerfile
     container_name: backoffice
     restart: unless-stopped
     ports:
       - "${BACKOFFICE_PORT:-8080}:8000"
     volumes:
-      # Runtime directories (user-created agents and workflows, read-write)
+      # Runtime directories (user-created agents, workflows, and context)
       - ./runtime:/app/runtime
-      # Examples (base agents and workflow templates in git, read-only)
-      - ./examples:/app/examples:ro
-      # Project root for deployment operations
-      - .:/project
       # Docker socket for container management
       - /var/run/docker.sock:/var/run/docker.sock
-      # Development mode: Uncomment to enable live code reloading
-      # - ./backoffice/backend:/app:ro
-      # - ./backoffice/frontend:/app/frontend:ro
     networks:
       - agent-network
     environment:
@@ -88,6 +81,7 @@ services:
 # VOLUMES
 # ============================================================================
 volumes:
+  # Ollama models volume (standard local volume)
   ollama-models:
     name: ollama-models-data
     driver: local

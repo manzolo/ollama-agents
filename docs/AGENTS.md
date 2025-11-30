@@ -97,7 +97,7 @@ Edit `docker-compose.yml` and add:
     volumes:
       - ./agents/my-new-agent/prompt.txt:/app/prompt.txt:ro
       - ./agents/my-new-agent/config.yml:/app/config.yml:ro
-      - ./shared/context/my-new-agent:/app/context
+      - ./runtime/context/my-new-agent:/app/context
     networks:
       - agent-network
     environment:

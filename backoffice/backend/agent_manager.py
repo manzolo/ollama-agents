@@ -142,7 +142,7 @@ echo "Deploying agent: {agent_name}"
 
 # Create agent directory
 mkdir -p agents/{agent_name}
-mkdir -p shared/context/{agent_name}
+mkdir -p runtime/context/{agent_name}
 
 # Create config.yml
 cat > agents/{agent_name}/config.yml << 'EOF'
@@ -194,7 +194,7 @@ To complete the deployment, add this to docker-compose.yml:
     volumes:
       - ./agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
       - ./agents/{agent_name}/config.yml:/app/config.yml:ro
-      - ./shared/context/{agent_name}:/app/context
+      - ./runtime/context/{agent_name}:/app/context
     networks:
       - agent-network
     environment:

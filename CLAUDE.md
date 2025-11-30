@@ -127,7 +127,7 @@ curl -X POST http://localhost:8080/api/plugins/discover
 │   ├── agents/          # User-created agents
 │   ├── compose/         # User-created compose files + .env files
 │   └── workflows/       # User-created workflows
-├── shared/context/      # Agent context memory (per-agent dirs)
+├── runtime/context/      # Agent context memory (per-agent dirs)
 └── docs/               # Documentation
 ```
 

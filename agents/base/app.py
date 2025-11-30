@@ -29,9 +29,25 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2")
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "4096"))
-CONTEXT_DIR = Path("/app/context")
-PROMPT_FILE = Path("/app/prompt.txt")
-CONFIG_FILE = Path("/app/config.yml")
+
+# Support for mounted runtime directory (Unified Standalone Architecture)
+# If AGENT_DATA_DIR is set, look for files there. Otherwise default to /app.
+AGENT_DATA_DIR = os.getenv("AGENT_DATA_DIR", "/app")
+DATA_PATH = Path(AGENT_DATA_DIR)
+
+CONTEXT_DIR = Path(os.getenv("CONTEXT_DIR", str(DATA_PATH / "context")))
+# Check if we are using the nested structure (runtime mount)
+if (DATA_PATH / "prompt.txt").exists():
+    PROMPT_FILE = DATA_PATH / "prompt.txt"
+    CONFIG_FILE = DATA_PATH / "config.yml"
+elif (DATA_PATH / "runtime" / "agents" / AGENT_NAME / "prompt.txt").exists():
+    # Fallback: if mounted at /app but files are in /app/runtime/agents/NAME
+    PROMPT_FILE = DATA_PATH / "runtime" / "agents" / AGENT_NAME / "prompt.txt"
+    CONFIG_FILE = DATA_PATH / "runtime" / "agents" / AGENT_NAME / "config.yml"
+else:
+    # Default fallback
+    PROMPT_FILE = DATA_PATH / "prompt.txt"
+    CONFIG_FILE = DATA_PATH / "config.yml"
 
 
 # ============================================================================

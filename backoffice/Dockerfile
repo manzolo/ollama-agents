@@ -19,17 +19,38 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
-COPY backend/requirements.txt .
+COPY backoffice/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
-COPY backend/ ./
+COPY backoffice/backend/ ./
 
 # Copy frontend
-COPY frontend/ ./frontend/
+COPY backoffice/frontend/ ./frontend/
 
-# Copy workflows directory (will be mounted as volume in production)
-RUN mkdir -p /app/workflows
+# Create directory structure for runtime data
+RUN mkdir -p /app/runtime/agents \
+    /app/runtime/agent-definitions \
+    /app/runtime/compose \
+    /app/runtime/workflows \
+    /app/examples/agents \
+    /app/examples/agent-definitions \
+    /app/examples/compose \
+    /app/examples/workflows
+
+# Copy example files into the image
+COPY examples/ /app/examples/
+
+# Copy base agent template
+COPY agents/ /app/base-agents/
+
+# Copy docker-compose files (required for DeploymentManager)
+COPY docker-compose*.yml ./
+
+# Set project root to /app (inside container)
+ENV PROJECT_ROOT=/app
+ENV HOST_PROJECT_ROOT=/app
+ENV STANDALONE_MODE=true
 
 # Expose port
 EXPOSE 8000

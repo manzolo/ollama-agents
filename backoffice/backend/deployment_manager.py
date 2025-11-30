@@ -40,7 +40,7 @@ class DeploymentManager:
         # Runtime agents directory (user-created, git-ignored)
         self.agents_dir = self.project_root / "runtime" / "agents"
         self.agents_dir.mkdir(parents=True, exist_ok=True)
-        self.shared_dir = self.project_root / "shared"
+
         self.env_path = self.project_root / ".env"
 
     def _detect_host_project_root(self, project_root: Path) -> Path:
@@ -99,6 +99,9 @@ class DeploymentManager:
     def get_compose_files(self, agent_name: str = None, include_gpu: bool = False) -> list:
         """
         Get list of compose files to use for docker compose commands.
+        
+        Returns CONTAINER filesystem paths since docker compose runs inside the container.
+        The compose files themselves contain host paths for build contexts and volumes.
 
         Args:
             agent_name: Optional specific agent name to include
@@ -107,6 +110,7 @@ class DeploymentManager:
         Returns:
             list: List of compose file arguments for docker compose command
         """
+        # Use container paths - docker compose runs inside the container
         files = ["-f", str(self.docker_compose_path)]
 
         # Add Ollama service (optional, can be external)
@@ -198,9 +202,18 @@ AGENT_NAME={agent_name}
         port = agent_definition["deployment"]["port"]
 
         # Create a complete, standalone compose file
-        # Use ${HOST_PROJECT_ROOT} variable for volume mounts to allow portability
-        # This variable is defined in .env or defaults to $PWD in docker-compose.yml
-
+        # Unified Standalone Architecture: Use named volumes for portability
+        # The 'runtime' is defined in the main docker-compose.yml
+        # In Dev: it's bind-mounted to host directories
+        # In Prod: it's standard Docker volume
+        
+        # Determine build context path
+        # In container, agents are in base-agents/. On host/dev, they are in agents/
+        if (self.project_root / "base-agents" / "base").exists():
+             build_context = self.project_root / "base-agents" / "base"
+        else:
+             build_context = self.project_root / "agents" / "base"
+        
         compose_content = f'''# ==========================================================================
 # AGENT: {agent_name.upper()}
 # ==========================================================================
@@ -212,18 +225,20 @@ AGENT_NAME={agent_name}
 services:
   {agent_name}:
     build:
-      context: ./agents/base
+      context: {build_context}
       dockerfile: Dockerfile
     container_name: agent-{agent_name}
     restart: unless-stopped
     env_file:
       - runtime/compose/.env.{agent_name}
+    environment:
+      - AGENT_DATA_DIR=/app/runtime/agents/{agent_name}
+      - CONTEXT_DIR=/app/runtime/context/{agent_name}
     ports:
       - "{port}:8000"
     volumes:
-      - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/prompt.txt:/app/prompt.txt:ro
-      - ${{HOST_PROJECT_ROOT}}/runtime/agents/{agent_name}/config.yml:/app/config.yml:ro
-      - ${{HOST_PROJECT_ROOT}}/shared/context/{agent_name}:/app/context
+      # Mount the runtime directory to access agent config, prompt and context
+      - ./runtime:/app/runtime
     networks:
       - agent-network
     healthcheck:
@@ -233,7 +248,6 @@ services:
       retries: 3
       start_period: 20s
 
-# Use the existing network from docker-compose.yml
 networks:
   agent-network:
     external: true
@@ -294,7 +308,7 @@ networks:
             agent_dir.mkdir(parents=True, exist_ok=True)
 
             # Create context directory
-            context_dir = self.shared_dir / "context" / agent_name
+            context_dir = self.agents_dir.parent / "context" / agent_name
             context_dir.mkdir(parents=True, exist_ok=True)
 
             # Create config.yml
@@ -498,15 +512,16 @@ networks:
                 compose_files = self.get_compose_files(agent_name=agent_name, include_gpu=gpu_mode)
 
                 # Build the service (use same project name as main compose)
+                # Compose files already contain host paths, so use container cwd
                 build_cmd = ["docker", "compose", "-p", "ollama-agents"] + compose_files + ["build", agent_name]
                 import subprocess
-                subprocess.run(build_cmd, cwd=self.project_root, check=True, capture_output=True)
+                subprocess.run(build_cmd, cwd=str(self.project_root), check=True, capture_output=True)
                 result["steps"][-1]["status"] = "completed"
 
                 # Remove existing container if it exists (to avoid mount issues)
                 try:
                     rm_cmd = ["docker", "compose", "-p", "ollama-agents"] + compose_files + ["rm", "-f", "-s", "-v", agent_name]
-                    subprocess.run(rm_cmd, cwd=self.project_root, check=False, capture_output=True)
+                    subprocess.run(rm_cmd, cwd=str(self.project_root), check=False, capture_output=True)
                 except Exception:
                     pass  # Ignore if container doesn't exist
 
@@ -525,7 +540,7 @@ networks:
                 # Start the service with force-recreate to avoid mount issues
                 result["steps"].append({"step": "start_container", "status": "running"})
                 up_cmd = ["docker", "compose", "-p", "ollama-agents"] + compose_files + ["up", "-d", "--force-recreate", agent_name]
-                subprocess.run(up_cmd, cwd=self.project_root, check=True, capture_output=True)
+                subprocess.run(up_cmd, cwd=str(self.project_root), check=True, capture_output=True)
                 result["steps"][-1]["status"] = "completed"
 
                 # Deploy completed
@@ -697,7 +712,7 @@ networks:
             # Start the service using docker-compose (use same project name and force-recreate)
             import subprocess
             up_cmd = ["docker", "compose", "-p", "ollama-agents"] + compose_files + ["up", "-d", "--force-recreate", agent_name]
-            result = subprocess.run(up_cmd, cwd=self.project_root, check=True, capture_output=True)
+            result = subprocess.run(up_cmd, cwd=str(self.project_root), check=True, capture_output=True)
 
             return {
                 "status": "success",
@@ -757,7 +772,7 @@ networks:
                     agent_dir = self.agents_dir / agent_name
                     if agent_dir.exists():
                         shutil.rmtree(agent_dir)
-                    context_dir = self.shared_dir / "context" / agent_name
+                    context_dir = self.agents_dir.parent / "context" / agent_name
                     if context_dir.exists():
                         shutil.rmtree(context_dir)
                     result["steps"][-1]["status"] = "completed"

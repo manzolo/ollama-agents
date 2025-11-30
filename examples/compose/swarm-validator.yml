@@ -20,7 +20,7 @@ services:
     volumes:
       - ./agents/swarm-validator/prompt.txt:/app/prompt.txt:ro
       - ./agents/swarm-validator/config.yml:/app/config.yml:ro
-      - ./shared/context/swarm-validator:/app/context
+      - ./runtime/context/swarm-validator:/app/context
     networks:
       - agent-network
     healthcheck:
@@ -30,7 +30,6 @@ services:
       retries: 3
       start_period: 20s
 
-# Use the existing network from docker-compose.yml
 networks:
   agent-network:
     external: true

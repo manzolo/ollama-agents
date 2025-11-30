@@ -100,7 +100,7 @@ ollama-agents/
 │   │   └── styles.css         # 750+ lines of CSS
 │   └── workflows/              # Workflow definitions (YAML)
 │       └── convert-and-validate.yml
-├── shared/
+├── runtime/
 │   └── context/                # Context memory storage
 │       ├── swarm-converter/    # Agent-specific history
 │       └── swarm-validator/

@@ -103,8 +103,8 @@ fi
 # ============================================================================
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║       Ollama Agents API Integration Test Suite        ║${NC}"
-echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║       Ollama Agents API Integration Test Suite         ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
 echo ""
 log_info "Testing against: $BACKOFFICE_URL"
 echo ""

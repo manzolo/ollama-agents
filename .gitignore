@@ -28,10 +28,6 @@ wheels/
 
 .claude/
 
-
-# Context memory (optional - uncomment if you don't want to track interactions)
-shared/context/**/*.json
-
 # IDE
 .vscode/
 .idea/
