@@ -7,6 +7,7 @@ Handles automated agent deployment with Docker support.
 import os
 import yaml
 import docker
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -205,15 +206,9 @@ AGENT_NAME={agent_name}
         # Unified Standalone Architecture: Use named volumes for portability
         # The 'runtime' is defined in the main docker-compose.yml
         # In Dev: it's bind-mounted to host directories
-        # In Prod: it's standard Docker volume
+        # In Prod: they are standard Docker volumes
         
-        # Determine build context path
-        # In container, agents are in base-agents/. On host/dev, they are in agents/
-        if (self.project_root / "base-agents" / "base").exists():
-             build_context = self.project_root / "base-agents" / "base"
-        else:
-             build_context = self.project_root / "agents" / "base"
-        
+        # The agent service will use the pre-built base image
         compose_content = f'''# ==========================================================================
 # AGENT: {agent_name.upper()}
 # ==========================================================================
@@ -224,9 +219,7 @@ AGENT_NAME={agent_name}
 
 services:
   {agent_name}:
-    build:
-      context: {build_context}
-      dockerfile: Dockerfile
+    image: ollama-agent-base:latest
     container_name: agent-{agent_name}
     restart: unless-stopped
     env_file:
@@ -510,13 +503,6 @@ networks:
 
                 # Get compose files for this specific agent
                 compose_files = self.get_compose_files(agent_name=agent_name, include_gpu=gpu_mode)
-
-                # Build the service (use same project name as main compose)
-                # Compose files already contain host paths, so use container cwd
-                build_cmd = ["docker", "compose", "-p", "ollama-agents"] + compose_files + ["build", agent_name]
-                import subprocess
-                subprocess.run(build_cmd, cwd=str(self.project_root), check=True, capture_output=True)
-                result["steps"][-1]["status"] = "completed"
 
                 # Remove existing container if it exists (to avoid mount issues)
                 try:

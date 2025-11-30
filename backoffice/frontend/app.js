@@ -606,6 +606,7 @@ const app = {
                         <span class="status-badge ${statusClass}">${agent.status}</span>
                     </div>
                     <p><strong>Model:</strong> ${agent.model || 'N/A'}</p>
+                    <p><strong>Ollama Host:</strong> <code>${agent.ollama_host || 'N/A'}</code></p>
                     <p><strong>URL:</strong> <code>${agent.url}</code></p>
                     ${agent.description ? `<p>${agent.description}</p>` : ''}
                     ${agent.capabilities && agent.capabilities.length > 0 ? `

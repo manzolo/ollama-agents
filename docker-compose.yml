@@ -79,6 +79,18 @@ services:
       retries: 5
       start_period: 20s
 
+  # ==========================================================================
+  # AGENT BASE IMAGE - Reusable base for all agents
+  # ==========================================================================
+  # This service is not meant to be run directly. It's used to build the
+  # 'ollama-agent-base:latest' image that all other agents are based on.
+  # ==========================================================================
+  agent-base:
+    build:
+      context: ./agents/base
+      dockerfile: Dockerfile
+    image: ollama-agent-base:latest
+
 # ============================================================================
 # VOLUMES
 # ============================================================================
