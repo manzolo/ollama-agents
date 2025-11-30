@@ -560,10 +560,16 @@ async def get_agent_definition_for_edit(agent_name: str):
             )
         
         # Transform the YAML structure to match the form fields
+        # The agent definition YAML might not have the host if it's an old file.
+        # So, we'll get it from the definition, but fall back to the global env var.
+        global_ollama_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+        ollama_host = definition.get("deployment", {}).get("ollama_host", global_ollama_host)
+
         return {
             "name": definition["agent"]["name"],
             "description": definition["agent"].get("description", ""),
             "port": definition["deployment"]["port"],
+            "ollama_host": ollama_host,
             "model": definition["deployment"]["model"],
             "temperature": definition["deployment"]["temperature"],
             "max_tokens": definition["deployment"]["max_tokens"],
