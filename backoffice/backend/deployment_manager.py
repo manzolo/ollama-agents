@@ -761,8 +761,16 @@ networks:
                 result["errors"].append(f"Failed to remove compose file: {str(e)}")
                 result["steps"][-1]["status"] = "failed"
 
-            # Step 3: Remove from env (no-op - .env.agents no longer used)
-            result["steps"].append({"step": "remove_from_env", "status": "completed"})
+            # Step 3: Remove agent's .env file
+            result["steps"].append({"step": "remove_env_file", "status": "running"})
+            env_path = self.agents_compose_dir / f".env.{agent_name}"
+            try:
+                if env_path.exists():
+                    env_path.unlink()
+                result["steps"][-1]["status"] = "completed"
+            except Exception as e:
+                result["errors"].append(f"Failed to remove .env file: {str(e)}")
+                result["steps"][-1]["status"] = "failed"
 
             # Step 4: Optionally delete agent files on disk
             if remove_files:
