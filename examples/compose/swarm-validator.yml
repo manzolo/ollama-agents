@@ -17,6 +17,7 @@ services:
       - examples/compose/.env.swarm-validator
     environment:
       - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
     ports:
       - "7002:8000"
     volumes:

@@ -176,8 +176,8 @@ class DeploymentManager:
         tokens_line = f"MAX_TOKENS={max_tokens}" if tokens_changed else f"# MAX_TOKENS={max_tokens}"
 
         # Always uncomment OLLAMA_HOST if it's different from the default/inferred one
-        # But for now, let's keep the existing behavior or just uncomment it if provided
-        ollama_host_line = f"# OLLAMA_HOST={ollama_host}" # Keep default behavior for now
+        default_host = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+        ollama_host_line = f"OLLAMA_HOST={ollama_host}" if ollama_host != default_host else f"# OLLAMA_HOST={ollama_host}"
 
         env_content = f'''# ============================================================================
 # AGENT: {agent_name}
