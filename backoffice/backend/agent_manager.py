@@ -4,6 +4,7 @@ Agent Manager Module
 Handles agent lifecycle management in a modular way.
 """
 
+import os
 import yaml
 from pathlib import Path
 from typing import Dict, Any
@@ -16,7 +17,7 @@ class AgentDefinition(BaseModel):
     description: str
     port: int
     ollama_host: str = "http://ollama:11434"
-    model: str = "llama3.2"
+    model: str = os.getenv("DEFAULT_MODEL", "llama3.2")
     temperature: float = 0.7
     max_tokens: int = 4096
     capabilities: list[str] = []

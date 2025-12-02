@@ -46,6 +46,8 @@ services:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       # Propagate network name for agent deployment
       - DOCKER_NETWORK_NAME=${DOCKER_NETWORK_NAME:-ollama-agent-network}
+      # Default model for agents
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2}
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
