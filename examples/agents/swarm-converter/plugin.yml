@@ -33,7 +33,6 @@ agent:
   port: 7001
 
   # Model configuration
-  model: llama3.2
   temperature: 0.3
   max_tokens: 8192
 
@@ -84,8 +83,7 @@ requires:
   ollama: ">=0.1.0"
 
   # Required models (will be pulled if not available)
-  models:
-    - llama3.2
+  # models: []
 
 # Health check configuration
 health:
