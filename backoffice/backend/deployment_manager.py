@@ -159,6 +159,26 @@ class DeploymentManager:
         default_temp = os.getenv("DEFAULT_TEMPERATURE", "0.7")
         default_tokens = os.getenv("DEFAULT_MAX_TOKENS", "4096")
 
+        # Prepare env var lines (uncomment if different from default)
+        model_line = f"MODEL_NAME={model}" if model != default_model else f"# MODEL_NAME={model}"
+        
+        # Handle numeric comparisons safely
+        try:
+            temp_changed = float(temperature) != float(default_temp)
+        except (ValueError, TypeError):
+            temp_changed = str(temperature) != str(default_temp)
+        temp_line = f"TEMPERATURE={temperature}" if temp_changed else f"# TEMPERATURE={temperature}"
+
+        try:
+            tokens_changed = int(max_tokens) != int(default_tokens)
+        except (ValueError, TypeError):
+            tokens_changed = str(max_tokens) != str(default_tokens)
+        tokens_line = f"MAX_TOKENS={max_tokens}" if tokens_changed else f"# MAX_TOKENS={max_tokens}"
+
+        # Always uncomment OLLAMA_HOST if it's different from the default/inferred one
+        # But for now, let's keep the existing behavior or just uncomment it if provided
+        ollama_host_line = f"# OLLAMA_HOST={ollama_host}" # Keep default behavior for now
+
         env_content = f'''# ============================================================================
 # AGENT: {agent_name}
 # ============================================================================
@@ -171,19 +191,19 @@ PORT={port}
 
 # Ollama model to use (optional - defaults to DEFAULT_MODEL={default_model})
 # Uncomment to override the global default model
-# MODEL_NAME={model}
+{model_line}
 
 # Model temperature (optional - defaults to DEFAULT_TEMPERATURE={default_temp})
 # Uncomment to override: 0.0 = deterministic, 1.0 = creative
-# TEMPERATURE={temperature}
+{temp_line}
 
 # Maximum tokens to generate (optional - defaults to DEFAULT_MAX_TOKENS={default_tokens})
 # Uncomment to override
-# MAX_TOKENS={max_tokens}
+{tokens_line}
 
 # Ollama host URL (optional - defaults to OLLAMA_HOST from main .env)
 # Uncomment to override for this specific agent
-# OLLAMA_HOST={ollama_host}
+{ollama_host_line}
 
 # Agent name (used for logging and identification)
 AGENT_NAME={agent_name}
