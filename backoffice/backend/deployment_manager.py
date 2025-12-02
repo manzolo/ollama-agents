@@ -154,6 +154,11 @@ class DeploymentManager:
         ollama_host = agent_definition["deployment"].get("ollama_host", "http://ollama:11434")
         description = agent_definition["agent"]["description"]
 
+        # Get global defaults from environment
+        default_model = os.getenv("DEFAULT_MODEL", "llama3.2")
+        default_temp = os.getenv("DEFAULT_TEMPERATURE", "0.7")
+        default_tokens = os.getenv("DEFAULT_MAX_TOKENS", "4096")
+
         env_content = f'''# ============================================================================
 # AGENT: {agent_name}
 # ============================================================================
@@ -164,17 +169,21 @@ class DeploymentManager:
 # Port to expose the agent on
 PORT={port}
 
-# Ollama model to use
-MODEL_NAME={model}
+# Ollama model to use (optional - defaults to DEFAULT_MODEL={default_model})
+# Uncomment to override the global default model
+# MODEL_NAME={model}
 
-# Model temperature (0.0 = deterministic, 1.0 = creative)
-TEMPERATURE={temperature}
+# Model temperature (optional - defaults to DEFAULT_TEMPERATURE={default_temp})
+# Uncomment to override: 0.0 = deterministic, 1.0 = creative
+# TEMPERATURE={temperature}
 
-# Maximum tokens to generate
-MAX_TOKENS={max_tokens}
+# Maximum tokens to generate (optional - defaults to DEFAULT_MAX_TOKENS={default_tokens})
+# Uncomment to override
+# MAX_TOKENS={max_tokens}
 
-# Ollama host URL (can be overridden per agent)
-OLLAMA_HOST={ollama_host}
+# Ollama host URL (optional - defaults to OLLAMA_HOST from main .env)
+# Uncomment to override for this specific agent
+# OLLAMA_HOST={ollama_host}
 
 # Agent name (used for logging and identification)
 AGENT_NAME={agent_name}
@@ -227,6 +236,11 @@ services:
     environment:
       - AGENT_DATA_DIR=/app/runtime/agents/{agent_name}
       - CONTEXT_DIR=/app/runtime/context/{agent_name}
+      # Pass through global defaults from main .env
+      - DEFAULT_MODEL=${{DEFAULT_MODEL:-llama3.2}}
+      - DEFAULT_TEMPERATURE=${{DEFAULT_TEMPERATURE:-0.7}}
+      - DEFAULT_MAX_TOKENS=${{DEFAULT_MAX_TOKENS:-4096}}
+      - OLLAMA_HOST=${{OLLAMA_HOST:-http://ollama:11434}}
     ports:
       - "{port}:8000"
     volumes:

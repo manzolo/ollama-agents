@@ -26,9 +26,10 @@ import uvicorn
 # ============================================================================
 AGENT_NAME = os.getenv("AGENT_NAME", "generic-agent")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2")
-TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "4096"))
+# Model priority: MODEL_NAME (agent-specific) > DEFAULT_MODEL (global) > "llama3.2" (hardcoded)
+MODEL_NAME = os.getenv("MODEL_NAME", os.getenv("DEFAULT_MODEL", "llama3.2"))
+TEMPERATURE = float(os.getenv("TEMPERATURE", os.getenv("DEFAULT_TEMPERATURE", "0.7")))
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", os.getenv("DEFAULT_MAX_TOKENS", "4096")))
 
 # Support for mounted runtime directory (Unified Standalone Architecture)
 # If AGENT_DATA_DIR is set, look for files there. Otherwise default to /app.
