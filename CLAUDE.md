@@ -148,12 +148,28 @@ runtime/compose/
 Agent `.env` file format:
 ```bash
 PORT=7001
-MODEL=llama3.2
+# Ollama model to use (optional - defaults to DEFAULT_MODEL from main .env)
+# Uncomment to override the global default model
+# MODEL_NAME=llama3.2
 TEMPERATURE=0.3
 MAX_TOKENS=8192
-OLLAMA_HOST=http://ollama:11434
+# Ollama host URL (optional - defaults to OLLAMA_HOST from main .env)
+# Uncomment to override for this specific agent
+# OLLAMA_HOST=http://ollama:11434
 AGENT_NAME=swarm-converter
 ```
+
+**Global Defaults Configuration:**
+Agents inherit model and configuration defaults from the main `.env` file:
+- `DEFAULT_MODEL` - Model used by all agents unless overridden (default: `llama3.2`)
+- `DEFAULT_TEMPERATURE` - Default temperature (default: `0.7`)
+- `DEFAULT_MAX_TOKENS` - Default max tokens (default: `4096`)
+- `OLLAMA_HOST` - Ollama service URL (default: `http://ollama:11434`)
+
+**Override Priority:**
+1. Agent-specific `.env` file (e.g., `MODEL_NAME=llama3.2` in `.env.my-agent`)
+2. Global defaults from main `.env` (e.g., `DEFAULT_MODEL=llama3.2`)
+3. Hardcoded fallbacks in agent base image
 
 Compose files reference the `.env` file via `env_file` directive:
 ```yaml
@@ -161,6 +177,12 @@ services:
   swarm-converter:
     env_file:
       - examples/compose/.env.swarm-converter  # Relative to project root
+    environment:
+      # Global defaults passed through from main .env
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2}
+      - DEFAULT_TEMPERATURE=${DEFAULT_TEMPERATURE:-0.7}
+      - DEFAULT_MAX_TOKENS=${DEFAULT_MAX_TOKENS:-4096}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
     ports:
       - "7001:8000"  # Hardcoded port mapping
 ```
@@ -168,6 +190,7 @@ services:
 **Key behaviors:**
 - `.env` files are loaded into containers at runtime via `env_file`
 - Port mappings in compose files use actual port numbers (not variables)
+- Model/temperature/tokens are optional in per-agent `.env` files (use global defaults)
 - Example agent configs (in `examples/`) are git-tracked as templates
 - Runtime agent configs (in `runtime/`) are gitignored (user-specific)
 
